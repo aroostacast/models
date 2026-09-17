@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Haunch Bridge Unit — 8′ span × 3′ sections · 8″ deck · tapered legs · tied with ready rod · Huber curbs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+    background: #f1f5f9;
+    color: #1a202c;
+    touch-action: none;
+    color-scheme: light;
+  }
+  canvas { display: block; }
+
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0.75));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 10px 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  #header h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: #1a202c; }
+  #header .dims { font-size: 12px; color: #4a5568; font-variant-numeric: tabular-nums; }
+  #header .stack { margin-left: auto; font-size: 11px; color: #718096; font-family: 'SF Mono', Menlo, monospace; }
+
+  .panel {
+    position: fixed;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 14px;
+    padding: 12px;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 4px 20px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.05);
+  }
+
+  #params   { top: 60px; left: 12px; width: 280px; }
+  #section  { top: 60px; right: 12px; width: 320px; }
+  #controls { bottom: 12px; left: 12px; }
+  #cameraBtns { bottom: 12px; right: 12px; }
+
+  .panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #718096;
+    margin-bottom: 10px;
+  }
+
+  /* Parameter sliders */
+  .param { display: grid; grid-template-columns: 96px 1fr 44px; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+  .param label { color: #2d3748; }
+  .param .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #1a202c; }
+  .param input[type=range] { width: 100%; accent-color: #2563eb; }
+  #advToggle { margin-top: 8px; width: 100%; text-align: left; font-size: 11px; color: #4a5568; padding: 6px 8px; min-height: 30px; }
+  #advToggle::before { content: '▸ '; }
+  #advToggle.active::before { content: '▾ '; }
+  #advToggle.active { background: rgba(15,23,42,0.06); color: #1a202c; border-color: rgba(15,23,42,0.15); }
+  .param-group { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 8px 0 2px; }
+  .param-group:first-of-type { margin-top: 0; }
+
+  .stats { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.08); }
+  .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+  .stat .label { color: #4a5568; }
+  .stat .count { font-weight: 700; font-variant-numeric: tabular-nums; color: #1a202c; }
+  .warn { margin-top: 8px; font-size: 11px; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 6px 8px; display: none; }
+  .warn.show { display: block; }
+
+  #sectionSvg { width: 100%; height: auto; display: block; }
+  #sectionSvg .cut { fill: #cfd5dc; stroke: #1a202c; stroke-width: 1.2; }
+  #sectionSvg .hole { fill: #fff; stroke: #1a202c; stroke-width: 0.8; }
+  #sectionSvg .dirt { fill: #c9ab8a; stroke: #7c5f42; stroke-width: 0.6; }
+  #sectionSvg .dim { stroke: #2563eb; stroke-width: 0.8; fill: none; }
+  #sectionSvg .dimtxt { font-size: 9px; fill: #1d4ed8; font-family: 'SF Mono', Menlo, monospace; font-weight: 600; }
+  #sectionSvg .block { fill: #e5e9ee; stroke: #94a3b8; stroke-width: 0.8; stroke-dasharray: 3 2; }
+
+  .toggle-row, .btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn-row { margin-top: 6px; }
+  .btn {
+    background: rgba(15,23,42,0.04);
+    border: 1px solid rgba(15,23,42,0.1);
+    color: #2d3748;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    font-family: inherit;
+    min-height: 36px;
+    user-select: none;
+    -webkit-user-select: none;
+    flex: 1;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(15,23,42,0.08); border-color: rgba(15,23,42,0.15); }
+  .btn:active { transform: scale(0.97); }
+  .btn.active { background: #2563eb; border-color: #1d4ed8; color: white; }
+  .btn.active:hover { background: #1d4ed8; }
+
+  #tooltip {
+    position: fixed;
+    background: rgba(15,23,42,0.95);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+    display: none;
+    z-index: 200;
+    transform: translate(12px, -32px);
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  @media (max-width: 900px) {
+    #header h1 { font-size: 13px; }
+    #header .dims { font-size: 11px; }
+    #header .stack { display: none; }
+    #params { width: 230px; padding: 10px; max-height: 60vh; overflow-y: auto; }
+    .param { grid-template-columns: 78px 1fr 40px; font-size: 11px; }
+    #section { display: none; }
+    #controls { bottom: 8px; left: 8px; right: 8px; padding: 10px; }
+    #cameraBtns { bottom: 70px; right: 8px; left: auto; padding: 8px; }
+    .btn { font-size: 11px; padding: 7px 8px; min-height: 34px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Haunch Bridge Unit</h1>
+  <div class="dims" id="dimsLabel"></div>
+  <div class="stack" id="stackLabel"></div>
+</div>
+
+<div id="params" class="panel">
+  <div class="panel-title">Proportions (inches)</div>
+  <div id="paramBody"></div>
+  <div class="stats" id="statsBody"></div>
+  <div class="warn" id="warnBox"></div>
+</div>
+
+<div id="section" class="panel">
+  <div class="panel-title">Section (looking along the roadway)</div>
+  <svg id="sectionSvg" viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="controls" class="panel">
+  <div class="panel-title">View</div>
+  <div class="toggle-row">
+    <button class="btn active" id="blocksToggle">Footer blocks</button>
+    <button class="btn active" id="rodsToggle">Tie rods</button>
+    <button class="btn active" id="curbsToggle">Curbs</button>
+    <button class="btn" id="dirtToggle">Dirt &amp; approach</button>
+    <button class="btn" id="explodeToggle">Lift out</button>
+    <button class="btn" id="resetToggle">Reset</button>
+  </div>
+</div>
+
+<div id="cameraBtns" class="panel">
+  <div class="panel-title">Camera</div>
+  <div class="btn-row">
+    <button class="btn active" data-view="iso">Iso</button>
+    <button class="btn" data-view="front">Front</button>
+    <button class="btn" data-view="side">Side</button>
+    <button class="btn" data-view="top">Top</button>
+    <button class="btn" data-view="under">Under</button>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+// PARAMETERS — all in inches. Everything downstream derives from these.
+// ============================================================
+// Coordinate system (world units = feet):
+//   Origin = center of the unit's footprint, at the bottom of the feet.
+//   +X across the unit, foot to foot — the span, and the TRAFFIC direction
+//   +Y up
+//   +Z along the run of sections (each section's D) — the roadway width
+// The section profile lives in the X-Y plane and is extruded along Z.
+//
+// Section profile of one leg: the outer face is vertical and flush with the
+// deck edge; the interior face is one straight taper from LEG_W at the foot
+// out to LEG_TOP_W at the deck soffit, LEG_H tall. No haunches, so the form
+// is two flat planes per leg. Overall height H = LEG_H + DECK_T.
+
+const P = {
+  W: 96,            // span, 4'–20' in 4' steps. ≤ 8' builds the legged frame; ≥ 12' builds solid beams
+  D: 36,            // depth of one section along the deck (extrusion length)
+  N: 5,             // number of sections laid end to end along Z
+  BEAM_BEARING: 12, // beam mode: how far each beam end sits onto its footer block
+  LEG_W: 10,        // foot width (leg width at the bottom)
+  LEG_TOP_W: 14,    // leg width where it meets the deck soffit
+  LEG_H: 8,         // leg height, foot to soffit
+  DECK_T: 8,        // deck thickness
+  POCKET_D: 2,      // depth the foot sits down into the wall block top
+  BLOCK_T: 24,      // wall block thickness (X) — feet must fit inside this
+  BLOCK_H: 24,      // wall block height
+  BLOCK_SIZES: [72, 48], // footer block lengths available (inches); mix chosen to cover the run
+  CLEAR: 0.5,       // pocket clearance around the foot, each side
+  // Tie channels: 1.5" nominal PVC sleeves cast through the deck along Z, one
+  // per section, lined up so a ready rod can pass through the whole run and be
+  // bolted at both ends.
+  CHANNEL_INSET: 24, // outer channels this far in from each side; third at center
+  CHANNEL_MIN_GAP: 12, // fall back to even spacing when outer channels get closer than this to center
+  PVC_OD: 1.9,       // 1.5" nominal schedule 40 PVC
+  PVC_ID: 1.61,
+  HOLE_D: 2.0,       // cast hole the sleeve sits in
+  ROD_D: 0.75,       // ready rod diameter
+  ROD_STICKOUT: 2.5, // rod past the end face of the run, each end
+  // Curbs: the Huber bridge precast curb, unchanged (4' × 10" × 18", 1" 45°
+  // chamfers on both top edges, three #6 dowels cast in). They sit along the
+  // outer ±Z edges of the end sections, running in the traffic direction, and
+  // the dowels drop through field-drilled holes with a washer welded below.
+  CURB: {
+    len: 48, w: 10, h: 18, haunch: 1, setback: 0,
+    dowel: { label: '#6 dowel', dia: 0.75, count: 3, inset: 4, endInset: 6, embed: 8, projBelowDeck: 2.5 },
+    washer: { od: 3, t: 0.25 },
+    color: 0xc6c1b7, weldColor: 0xff7a1a,
+  },
+  // Dirt cover over the deck (between the curbs) and an approach embankment
+  // off each end of the span, retained by the footer blocks. The approach runs
+  // level for APPROACH_LANDING past the deck edge, then slopes to grade over
+  // the rest of the way down at APPROACH_GRADE; only APPROACH_SHOW of it is drawn.
+  DIRT_T: 4,
+  APPROACH_GRADE: 9,     // % slope of the approach past the landing
+  APPROACH_LANDING: 24,
+  APPROACH_SHOW: 240,    // how much approach to draw before it fades out
+  // Lifting hooks: four loop anchors in the top of each section, each sitting
+  // in a round recess so nothing stands proud of the deck surface.
+  HOOK_ROD_D: 0.75,
+  HOOK_LOOP_R: 1.75,   // loop centerline radius
+  HOOK_POCKET_D: 6,    // recess diameter
+  HOOK_POCKET_DEPTH: 3, // recess depth below the deck top
+};
+
+// Picking a span sets the section format. 4' and 8' are the legged frame;
+// 12', 16' and 20' are solid beams on flat-top blocks. The run stays about
+// five 3' sections wide, so the 2'-wide 20' beams get seven.
+const WIDTH_PRESETS = {
+  48:  { D: 36, N: 5, DECK_T: 8 },
+  96:  { D: 36, N: 5, DECK_T: 8 },
+  144: { D: 36, N: 5, DECK_T: 12 },
+  192: { D: 36, N: 5, DECK_T: 16 },
+  240: { D: 24, N: 7, DECK_T: 20 },
+};
+const isBeam = () => P.W >= 144;
+function applyWidthPreset() {
+  const pre = WIDTH_PRESETS[P.W];
+  if (pre) Object.assign(P, pre);
+}
+
+const PARAM_DEFS = [
+  { key: 'W',            label: 'Span',         min: 48, max: 240, step: 48, fmt: v => `${v / 12}′` },
+  { key: 'DIRT_T',       label: 'Dirt cover',   min: 2,  max: 10, step: 1 },
+  { key: 'APPROACH_GRADE', label: 'Approach',   min: 3,  max: 25, step: 1, unit: '%' },
+  // ---- advanced ----
+  { group: 'Sections', adv: true },
+  { key: 'D',            label: 'Section depth', min: 12, max: 72, step: 6, adv: true },
+  { key: 'N',            label: 'Sections',     min: 1,  max: 12, step: 1, unit: '', adv: true },
+  { key: 'DECK_T',       label: 'Deck thick',   min: 4,  max: 24, step: 1, adv: true },
+  { key: 'LEG_H',        label: 'Leg height',   min: 6,  max: 36, step: 1, adv: true, frameOnly: true },
+  { key: 'LEG_W',        label: 'Foot width',   min: 6,  max: 30, step: 1, adv: true, frameOnly: true },
+  { key: 'LEG_TOP_W',    label: 'Leg top width', min: 6, max: 36, step: 1, adv: true, frameOnly: true },
+  { key: 'BEAM_BEARING', label: 'Bearing',      min: 6,  max: 24, step: 1, adv: true, beamOnly: true },
+  { group: 'Footer blocks', adv: true },
+  { key: 'POCKET_D',     label: 'Pocket depth', min: 0,  max: 6,  step: 0.5, adv: true, frameOnly: true },
+  { key: 'BLOCK_T',      label: 'Block thick',  min: 12, max: 36, step: 6, adv: true },
+  { key: 'BLOCK_H',      label: 'Block height', min: 12, max: 36, step: 6, adv: true },
+];
+
+const DEFAULTS = { ...P };
+const CONCRETE_PCF = 150;
+const IN = 1 / 12;   // inches → feet
+
+// Derived values. Recomputed on every rebuild.
+function derive() {
+  const beam = isBeam();
+  const H = beam ? P.DECK_T : P.LEG_H + P.DECK_T;
+  const clearBottom = beam ? P.W - 2 * P.BEAM_BEARING : P.W - 2 * P.LEG_W;
+  const clearSoffit = beam ? clearBottom : P.W - 2 * P.LEG_TOP_W;
+  // Section area (in²): full rectangle minus the trapezoidal opening (frame only).
+  const openingArea = beam ? 0 : (clearBottom + Math.max(clearSoffit, 0)) / 2 * P.LEG_H;
+  const channelXs = channelPositions();
+  const holeArea = channelXs.length * Math.PI * (P.HOLE_D / 2) ** 2;
+  const area = P.W * H - Math.max(openingArea, 0) - holeArea;
+  const volumeFt3 = area * P.D / 1728;             // one section
+  const runLen = P.N * P.D;                          // total run along Z
+  const footerRow = solveFooterRow(runLen);
+  return {
+    beam, H, clearBottom, clearSoffit, area, volumeFt3,
+    pocketD: beam ? 0 : P.POCKET_D,                    // beams sit on flat-top blocks
+    footX: beam ? P.W / 2 : (P.W - P.LEG_W) / 2,        // footer block centerline from the span center
+    weightLb: volumeFt3 * CONCRETE_PCF,
+    runLen, footerRow, blocksPerSide: footerRow.length,
+    channelXs, channelY: H - P.DECK_T / 2,
+    curbs: curbLayout(H),
+    footFitsBlock: beam || P.LEG_W + 2 * P.CLEAR <= P.BLOCK_T,
+  };
+}
+
+// Curb layout: floor(W / len) curbs per side, centered along X, on the outer
+// ±Z edges of the run. Each dowel is checked against the soffit: where it
+// exits into the clear opening it gets a welded washer; where it lands over a
+// leg or haunch it is a blind hole into solid concrete (no washer).
+function curbLayout(H) {
+  const C = P.CURB;
+  const perSide = Math.max(1, Math.floor(P.W / C.len + 1e-6));
+  const runLen = P.N * P.D;
+  const b = isBeam() ? P.W / 2 - P.BEAM_BEARING : P.W / 2 - P.LEG_TOP_W;   // clear half-width under the deck
+  const n = C.dowel.count, a = C.len / 2 - C.dowel.endInset;
+  const dowelDx = n === 1 ? [0] : Array.from({ length: n }, (_, i) => -a + i * (2 * a) / (n - 1));
+  const list = [];
+  [-1, 1].forEach(side => {
+    for (let j = 0; j < perSide; j++) {
+      const xc = (j - (perSide - 1) / 2) * C.len;
+      const zc = side * (runLen / 2 - C.setback - C.w / 2);
+      const dowels = dowelDx.map(dx => {
+        const x = xc + dx;
+        const clear = Math.abs(x) + C.washer.od / 2 <= b;
+        return { x, z: side * (runLen / 2 - C.setback - C.dowel.inset), clear };
+      });
+      list.push({ side, index: j, xc, zc, dowels });
+    }
+  });
+  const area = C.w * C.h - C.haunch * C.haunch;
+  return { list, perSide, weightLb: C.len * area / 1728 * CONCRETE_PCF,
+           blindDowels: list.reduce((k, c) => k + c.dowels.filter(d => !d.clear).length, 0) };
+}
+
+// Tie channel X positions: 2' in from each side plus one at center. When the
+// unit is narrow enough that the outer channels crowd the center one, fall
+// back to even spacing at quarter points.
+function channelPositions() {
+  const outer = P.W / 2 - P.CHANNEL_INSET;
+  const x = outer >= P.CHANNEL_MIN_GAP ? outer : P.W / 4;
+  return [-x, 0, x];
+}
+
+// Pick footer block lengths (one row per side) that cover the run with the
+// least overhang, then the fewest blocks. Exhaustive over the small size set.
+// Returns block lengths in inches, longest first.
+function solveFooterRow(runLen) {
+  const sizes = [...P.BLOCK_SIZES].sort((a, b) => b - a);
+  const maxN = Math.ceil(runLen / Math.min(...sizes)) + 1;
+  let best = null;
+  function search(i, counts, total, n) {
+    if (i === sizes.length) {
+      if (total < runLen) return;
+      const over = total - runLen;
+      if (!best || over < best.over || (over === best.over && n < best.n)) best = { counts: [...counts], over, n };
+      return;
+    }
+    for (let c = 0; c <= maxN; c++) {
+      counts[i] = c;
+      search(i + 1, counts, total + c * sizes[i], n + c);
+    }
+  }
+  search(0, [], 0, 0);
+  const row = [];
+  sizes.forEach((len, i) => { for (let c = 0; c < best.counts[i]; c++) row.push(len); });
+  return row;
+}
+
+// UI state
+const state = { showBlocks: true, showRods: true, showCurbs: true, showDirt: false, lifted: false };
+
+// ============================================================
+// GEOMETRY
+// ============================================================
+// Section polygon in inches, X-Y plane, origin at bottom center. Clockwise
+// from the bottom-left outer corner, interior traced across the opening.
+function sectionPoints() {
+  const { H } = derive();
+  const w = P.W / 2;
+  if (isBeam()) return [[-w, 0], [-w, H], [w, H], [w, 0]];
+  const a = w - P.LEG_W;                       // interior face at the foot
+  const t = Math.max(w - P.LEG_TOP_W, 0);      // interior face at the soffit
+  return [
+    [-w, 0], [-w, H], [w, H], [w, 0],
+    [a, 0], [t, P.LEG_H], [-t, P.LEG_H], [-a, 0],
+  ];
+}
+
+function createFrameGeometry() {
+  const pts = sectionPoints();
+  const shape = new THREE.Shape();
+  pts.forEach(([x, y], i) => i === 0 ? shape.moveTo(x * IN, y * IN) : shape.lineTo(x * IN, y * IN));
+  shape.closePath();
+  const { channelXs, channelY } = derive();
+  channelXs.forEach(x => {
+    const hole = new THREE.Path();
+    hole.absarc(x * IN, channelY * IN, P.HOLE_D / 2 * IN, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+  });
+  const geo = new THREE.ExtrudeGeometry(shape, { steps: 1, depth: P.D * IN, bevelEnabled: false, curveSegments: 24 });
+  geo.translate(0, 0, -P.D * IN / 2);   // center along Z; X-Y already sit on the origin
+  return geo;
+}
+
+// Hardware materials
+const pvcMat   = new THREE.MeshPhongMaterial({ color: 0xf4f4f0, shininess: 30 });
+const steelMat = new THREE.MeshPhongMaterial({ color: 0x4b5563, shininess: 40 });
+const zincMat  = new THREE.MeshPhongMaterial({ color: 0x9ca3af, shininess: 60 });
+
+// Four recessed lifting loops in the top of one section, at 30% of the width
+// in from each side and quarter points along the depth. Loop plane is X-Y.
+//
+// The recess is faked without CSG, using render order: the pocket interior
+// (inward-facing walls + floor) and the loop draw first; then an invisible
+// disc a hair above the deck top writes depth only; then the deck draws and
+// its top face fails the depth test inside the disc, leaving the pocket
+// visible. Render orders: pocket 0 → mask 1 → deck 2.
+const RO_POCKET = 0, RO_MASK = 1, RO_DECK = 2;
+const pocketMat = new THREE.MeshPhongMaterial({ color: 0x8a949f, shininess: 4, side: THREE.BackSide });
+const pocketFloorMat = new THREE.MeshPhongMaterial({ color: 0x7d8792, shininess: 4 });
+const maskMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+
+function createHooks() {
+  const g = new THREE.Group();
+  const { H } = derive();
+  const r = P.HOOK_POCKET_D / 2 * IN, depth = P.HOOK_POCKET_DEPTH * IN;
+  const rodR = P.HOOK_ROD_D / 2 * IN;
+  const loopGeo  = new THREE.TorusGeometry(P.HOOK_LOOP_R * IN, rodR, 10, 24, Math.PI);
+  const wallGeo  = new THREE.CylinderGeometry(r, r, depth, 32, 1, true);
+  const floorGeo = new THREE.CircleGeometry(r, 32);
+  floorGeo.rotateX(-Math.PI / 2);
+  const maskGeo  = new THREE.CircleGeometry(r, 32);
+  maskGeo.rotateX(-Math.PI / 2);
+
+  const xs = [-0.3 * P.W, 0.3 * P.W], zs = [-P.D / 4, P.D / 4];
+  xs.forEach(x => zs.forEach(z => {
+    const hook = new THREE.Group();
+    hook.position.set(x * IN, H * IN, z * IN);   // at the deck top surface
+
+    const wall = new THREE.Mesh(wallGeo, pocketMat);
+    wall.position.y = -depth / 2;
+    wall.renderOrder = RO_POCKET;
+    const floor = new THREE.Mesh(floorGeo, pocketFloorMat);
+    floor.position.y = -depth;
+    floor.renderOrder = RO_POCKET;
+    const loop = new THREE.Mesh(loopGeo, steelMat);
+    loop.position.y = -depth + rodR;               // loop ends bear on the recess floor
+    loop.renderOrder = RO_POCKET;
+    const mask = new THREE.Mesh(maskGeo, maskMat);
+    mask.position.y = 0.03 * IN;                   // just above the deck top
+    mask.renderOrder = RO_MASK;
+
+    hook.add(wall, floor, loop, mask);
+    g.add(hook);
+  }));
+  g.userData = { name: 'Lifting hooks', kind: 'hook' };
+  return g;
+}
+
+// PVC sleeves for one section: one per channel, full section depth.
+function createSleeves() {
+  const g = new THREE.Group();
+  const { channelXs, channelY } = derive();
+  const geo = new THREE.CylinderGeometry(P.PVC_OD / 2 * IN, P.PVC_OD / 2 * IN, P.D * IN, 24, 1, true);
+  geo.rotateX(Math.PI / 2);
+  channelXs.forEach(x => {
+    const m = new THREE.Mesh(geo, pvcMat);
+    m.position.set(x * IN, channelY * IN, 0);
+    g.add(m);
+  });
+  return g;
+}
+
+// Ready rods through the whole run with a washer and hex nut at each end.
+function createTieRods() {
+  const g = new THREE.Group();
+  const { channelXs, channelY, runLen } = derive();
+  const rodLen = (runLen + 2 * P.ROD_STICKOUT) * IN;
+  const rodGeo = new THREE.CylinderGeometry(P.ROD_D / 2 * IN, P.ROD_D / 2 * IN, rodLen, 16);
+  rodGeo.rotateX(Math.PI / 2);
+  const washerT = 0.15 * IN, nutT = 0.65 * IN;
+  const washerGeo = new THREE.CylinderGeometry(P.ROD_D * 1.4 * IN, P.ROD_D * 1.4 * IN, washerT, 24);
+  washerGeo.rotateX(Math.PI / 2);
+  const nutGeo = new THREE.CylinderGeometry(P.ROD_D * 0.95 * IN, P.ROD_D * 0.95 * IN, nutT, 6);
+  nutGeo.rotateX(Math.PI / 2);
+  channelXs.forEach(x => {
+    const rod = new THREE.Mesh(rodGeo, steelMat);
+    rod.position.set(x * IN, channelY * IN, 0);
+    rod.castShadow = true;
+    g.add(rod);
+    [-1, 1].forEach(sg => {
+      const face = sg * runLen / 2 * IN;
+      const washer = new THREE.Mesh(washerGeo, zincMat);
+      washer.position.set(x * IN, channelY * IN, face + sg * washerT / 2);
+      const nut = new THREE.Mesh(nutGeo, zincMat);
+      nut.position.set(x * IN, channelY * IN, face + sg * (washerT + nutT / 2));
+      nut.castShadow = true;
+      g.add(washer, nut);
+    });
+  });
+  g.userData = { name: 'Tie rods', kind: 'rod' };
+  return g;
+}
+
+// Curb: profile across (Z) × up (Y), extruded along X — the Huber curbGeo,
+// built the same way so the two pages stay in step.
+const curbMat  = new THREE.MeshPhongMaterial({ color: P.CURB.color, shininess: 6 });
+const weldMat  = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: P.CURB.weldColor, emissiveIntensity: 0.6, shininess: 10 });
+function createCurbGeometry() {
+  const C = P.CURB, w = C.w * IN, h = C.h * IN, len = C.len * IN;
+  const c = Math.min(C.haunch * IN, w / 2 - 0.01, h - 0.01);
+  const shape = new THREE.Shape([[-w / 2, 0], [w / 2, 0], [w / 2, h - c], [w / 2 - c, h], [-w / 2 + c, h], [-w / 2, h - c]].map(([z, y]) => new THREE.Vector2(z, y)));
+  const g = new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false });
+  g.rotateY(Math.PI / 2);          // extrusion axis → world X
+  g.translate(-len / 2, 0, 0);
+  g.computeVertexNormals();
+  return g;
+}
+
+// One curb with its dowels, washers and welds. Local origin = curb center on
+// the deck top surface. Dowel positions are passed in world-relative to the
+// curb (x along the curb, z from the run centerline).
+function createCurb(spec, deckTopY, curbGeo) {
+  const C = P.CURB;
+  const g = new THREE.Group();
+  g.position.set(spec.xc * IN, deckTopY, spec.zc * IN);
+  const conc = new THREE.Mesh(curbGeo, curbMat);
+  conc.castShadow = true; conc.receiveShadow = true;
+  conc.add(new THREE.LineSegments(new THREE.EdgesGeometry(curbGeo), new THREE.LineBasicMaterial({ color: 0x1a202c, transparent: true, opacity: 0.6 })));
+  conc.userData = { name: `Curb ${spec.side > 0 ? 'N' : 'S'}${spec.index + 1}`, kind: 'curb' };
+  g.add(conc);
+
+  const dLen = (C.dowel.embed + P.DECK_T + C.dowel.projBelowDeck) * IN;
+  const dowelGeo = new THREE.CylinderGeometry(C.dowel.dia / 2 * IN, C.dowel.dia / 2 * IN, dLen, 10);
+  const washerGeo = new THREE.CylinderGeometry(C.washer.od / 2 * IN, C.washer.od / 2 * IN, C.washer.t * IN, 16);
+  const weldGeo = new THREE.TorusGeometry((C.dowel.dia / 2 + 0.12) * IN, 0.1 * IN, 6, 16);
+  weldGeo.rotateX(Math.PI / 2);
+  spec.dowels.forEach(d => {
+    const lx = (d.x - spec.xc) * IN, lz = (d.z - spec.zc) * IN;
+    const dowel = new THREE.Mesh(dowelGeo, steelMat);
+    dowel.position.set(lx, C.dowel.embed * IN - dLen / 2, lz);
+    dowel.userData = { name: 'Curb dowel', kind: 'dowel', clear: d.clear };
+    g.add(dowel);
+    if (d.clear) {
+      const washer = new THREE.Mesh(washerGeo, zincMat);
+      washer.position.set(lx, -(P.DECK_T + C.washer.t / 2) * IN, lz);
+      washer.userData = { name: 'Welded washer', kind: 'washer' };
+      const weld = new THREE.Mesh(weldGeo, weldMat);
+      weld.position.set(lx, -(P.DECK_T + C.washer.t + 0.02) * IN, lz);
+      g.add(washer, weld);
+    }
+  });
+  return g;
+}
+
+// Dirt: a slab over the deck between the curbs (rides with the sections), and
+// an approach wedge off each end of the span sitting on the ground.
+const dirtMat = new THREE.MeshLambertMaterial({ color: 0x9a7b5a });
+// Approach fill material: same dirt, but fades to nothing with distance from
+// the span center so only the first stretch of embankment is drawn.
+const approachMat = new THREE.MeshLambertMaterial({ color: 0x9a7b5a, transparent: true });
+approachMat.onBeforeCompile = sh => {
+  sh.uniforms.fadeStart = approachMat.userData.fadeStart = { value: 10 };
+  sh.uniforms.fadeEnd   = approachMat.userData.fadeEnd   = { value: 20 };
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying float vWX;')
+    .replace('#include <project_vertex>', '#include <project_vertex>\nvWX = (modelMatrix * vec4(transformed, 1.0)).x;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying float vWX;\nuniform float fadeStart;\nuniform float fadeEnd;')
+    .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(fadeStart, fadeEnd, abs(vWX));');
+};
+function createDeckDirt(dv) {
+  const zw = (state.showCurbs ? dv.runLen - 2 * P.CURB.w : dv.runLen) * IN - 0.02;   // hair short of the curb faces
+  const geo = new THREE.BoxGeometry(P.W * IN, P.DIRT_T * IN, zw);
+  const m = new THREE.Mesh(geo, dirtMat);
+  m.position.set(0, (dv.H + P.DIRT_T / 2) * IN, 0);
+  m.castShadow = true; m.receiveShadow = true;
+  m.userData = { name: 'Dirt cover', kind: 'dirt', sub: `${P.DIRT_T}″ over the deck · ${(P.W * P.DIRT_T * zw / IN / 1728 / 27).toFixed(2)} yd³` };
+  return m;
+}
+// Approach profile in X-Y for the +X side, in feet; mirrored for -X. Level
+// for the landing, then down at APPROACH_GRADE to grade. `drawn` is the
+// truncated profile actually rendered (it fades out before its cut end);
+// `full` runs all the way to grade and is what the fill volume uses.
+function approachProfile(dv, topY) {
+  const xe = P.W / 2 * IN + 0.002;           // hair past the deck edge so faces don't fight the leg
+  const land = P.APPROACH_LANDING * IN;
+  const slopeLen = topY / (P.APPROACH_GRADE / 100);
+  const full = [[xe, 0], [xe + land + slopeLen, 0], [xe + land, topY], [xe, topY]];
+  const show = P.APPROACH_SHOW * IN;
+  if (land + slopeLen <= show) return { full, drawn: full, fullLen: land + slopeLen };
+  const yCut = topY * (1 - (show - land) / slopeLen);
+  const drawn = [[xe, 0], [xe + show, 0], [xe + show, yCut], [xe + land, topY], [xe, topY]];
+  return { full, drawn, fullLen: land + slopeLen };
+}
+function createApproach(dv, side, topY) {
+  const prof = approachProfile(dv, topY);
+  const pts = prof.full;
+  const shape = new THREE.Shape();
+  prof.drawn.forEach(([x, y], i) => i === 0 ? shape.moveTo(side * x, y) : shape.lineTo(side * x, y));
+  shape.closePath();
+  const xe = prof.drawn[0][0], xEnd = prof.drawn[1][0];
+  approachMat.userData.fadeStart && (approachMat.userData.fadeStart.value = xe + (xEnd - xe) * 0.45);
+  approachMat.userData.fadeEnd   && (approachMat.userData.fadeEnd.value   = xEnd - 0.05);
+  approachMat.userData.pending = [xe + (xEnd - xe) * 0.45, xEnd - 0.05];
+  // A hair narrower than the run so the fill's end faces don't sit on the
+  // footer block end faces (coplanar faces flicker).
+  const zw = dv.runLen * IN - 0.08;
+  const geo = new THREE.ExtrudeGeometry(shape, { steps: 1, depth: zw, bevelEnabled: false });
+  geo.translate(0, 0, -zw / 2);
+  const m = new THREE.Mesh(geo, approachMat);
+  m.receiveShadow = true;                   // no cast: the faded tail would still throw a hard shadow
+  // Fill volume: profile area (shoelace) less the footer block buried in it.
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length]; area += x1 * y2 - x2 * y1; }
+  area = Math.abs(area) / 2;
+  if (state.showBlocks) {
+    const blockOuter = (dv.footX + P.BLOCK_T / 2) * IN;
+    area -= Math.max(0, blockOuter - pts[0][0]) * P.BLOCK_H * IN;
+  }
+  const yd3 = area * zw / 27;
+  m.userData = { name: `Approach fill (${side > 0 ? 'E' : 'W'})`, kind: 'dirt', sub: `${P.APPROACH_GRADE}% grade · ${fmtFtIn(Math.round(prof.fullLen / IN))} to grade · ${fmtFtIn(topY / IN)} high at the deck · ~${yd3.toFixed(1)} yd³ less the footer block`, yd3 };
+  return m;
+}
+
+// Footer block with a groove running its full length: a base slab plus two
+// side lips. Grooves line up block to block into one continuous seat.
+// Local origin = block center in X/Z, at the bottom of the block.
+function createWallBlock(side, index, count, lengthIn) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshPhongMaterial({ color: 0x9aa6b4, shininess: 6 });
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x1a202c, transparent: true, opacity: 0.55 });
+
+  const T = P.BLOCK_T * IN, Hb = P.BLOCK_H * IN, L = lengthIn * IN;
+  const pd = derive().pocketD * IN;
+  const pw = (P.LEG_W + 2 * P.CLEAR) * IN;   // pocket width (X)
+
+  function box(w, h, d, x, y, z) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat));
+    g.add(m);
+  }
+
+  const baseH = Hb - pd;
+  box(T, baseH, L, 0, baseH / 2, 0);
+  if (pd > 0) {
+    const lipY = baseH + pd / 2;
+    const lipX = (T - pw) / 2;              // each side lip width
+    if (lipX > 0) {
+      box(lipX, pd, L,  -(T / 2 - lipX / 2), lipY, 0);
+      box(lipX, pd, L,   (T / 2 - lipX / 2), lipY, 0);
+    }
+  }
+  g.userData = { name: `Footer block ${index + 1} of ${count} (${side})`, kind: 'block', lengthIn };
+  return g;
+}
+
+// ============================================================
+// SCENE
+// ============================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xeef2f7);
+scene.fog = new THREE.Fog(0xeef2f7, 120, 400);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 600);
+camera.position.set(9, 6, 11);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.78);
+dirLight.position.set(18, 36, 22);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(4096, 4096);
+dirLight.shadow.camera.left = -45; dirLight.shadow.camera.right = 45;
+dirLight.shadow.camera.top = 45;   dirLight.shadow.camera.bottom = -45;
+dirLight.shadow.camera.near = 1;   dirLight.shadow.camera.far = 140;
+dirLight.shadow.bias = -0.0005;
+scene.add(dirLight);
+const fillLight = new THREE.DirectionalLight(0xb8d4f0, 0.32);
+fillLight.position.set(-8, 8, -6);
+scene.add(fillLight);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshLambertMaterial({ color: 0xdce3eb }));
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.02;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(120, 120, 0x94a3b8, 0xc4cdd6);
+grid.material.opacity = 0.6;
+grid.material.transparent = true;
+scene.add(grid);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 2;
+controls.maxDistance = 200;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+// Groups: the bridge unit rides above the blocks; the blocks group hides on toggle.
+const frameGroup = new THREE.Group();
+const blocksGroup = new THREE.Group();
+scene.add(frameGroup, blocksGroup);
+const pickables = [];
+let rodsGroup = null;
+const curbsGroup = new THREE.Group();
+frameGroup.add(curbsGroup);
+const deckDirtGroup = new THREE.Group();   // rides with the sections
+frameGroup.add(deckDirtGroup);
+const approachGroup = new THREE.Group();   // sits on the ground
+scene.add(approachGroup);
+
+const frameMat = new THREE.MeshPhongMaterial({ color: 0xb9c4d0, shininess: 10 });
+
+function build() {
+  [frameGroup, blocksGroup, curbsGroup, deckDirtGroup, approachGroup].forEach(g => { while (g.children.length) g.remove(g.children[0]); });
+  frameGroup.add(curbsGroup, deckDirtGroup);
+  pickables.length = 0;
+
+  const dv = derive();
+
+  // Sections laid end to end along Z, the run centered on the origin.
+  const geo = createFrameGeometry();
+  const edgeGeo = new THREE.EdgesGeometry(geo);
+  const runFt = dv.runLen * IN, dFt = P.D * IN;
+  for (let i = 0; i < P.N; i++) {
+    const mesh = new THREE.Mesh(geo, frameMat);
+    mesh.position.z = -runFt / 2 + dFt / 2 + i * dFt;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.add(new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x1a202c, transparent: true, opacity: 0.78 })));
+    mesh.userData = { name: `${dv.beam ? 'Beam' : 'Section'} ${i + 1} of ${P.N}`, kind: 'frame', index: i };
+    mesh.renderOrder = RO_DECK;
+    mesh.add(createHooks(), createSleeves());
+    frameGroup.add(mesh);
+    pickables.push(mesh);
+  }
+  rodsGroup = createTieRods();
+  frameGroup.add(rodsGroup);
+
+  // Dirt cover and approaches.
+  if (state.showDirt) {
+    deckDirtGroup.add(createDeckDirt(dv));
+    const topY = frameRestY() + (dv.H + P.DIRT_T) * IN;
+    [-1, 1].forEach(side => approachGroup.add(createApproach(dv, side, topY)));
+    pickables.push(deckDirtGroup, approachGroup);
+  }
+
+  // Curbs along the outer edges of the end sections, running in the traffic direction.
+  const curbGeo = createCurbGeometry();
+  dv.curbs.list.forEach(spec => {
+    const c = createCurb(spec, dv.H * IN, curbGeo);
+    curbsGroup.add(c);
+    pickables.push(c);
+  });
+
+  // One row of footer blocks under each foot, also centered on the origin.
+  const footX = dv.footX * IN;
+  // The right row runs in reverse order so block joints stagger across the run.
+  ['left', 'right'].forEach((side, si) => {
+    const row = si === 0 ? dv.footerRow : [...dv.footerRow].reverse();
+    const rowLen = row.reduce((a, b) => a + b, 0) * IN;
+    let z = -rowLen / 2;
+    row.forEach((len, i) => {
+      const b = createWallBlock(side, i, row.length, len);
+      b.position.x = (si === 0 ? -1 : 1) * footX;
+      b.position.z = z + len * IN / 2;
+      z += len * IN;
+      blocksGroup.add(b);
+      pickables.push(b);
+    });
+  });
+
+  applyState();
+  updateParams();
+  updateSection();
+  updateHeader();
+}
+
+// Frame sits with its feet POCKET_D down into the block tops when blocks are shown.
+function frameRestY() {
+  return state.showBlocks ? (P.BLOCK_H - derive().pocketD) * IN : 0;
+}
+function applyState() {
+  blocksGroup.visible = state.showBlocks;
+  if (rodsGroup) rodsGroup.visible = state.showRods;
+  curbsGroup.visible = state.showCurbs;
+  const lift = state.lifted ? 1.5 : 0;
+  frameGroup.position.y = frameRestY() + lift;
+  const { H } = derive();
+  controls.target.set(0, frameRestY() + H * IN / 2, 0);
+}
+
+// ============================================================
+// UI: parameters, stats, section drawing, header
+// ============================================================
+function fmtFtIn(inches) {
+  const ft = Math.floor(inches / 12), rem = +(inches - ft * 12).toFixed(2);
+  if (ft === 0) return `${rem}″`;
+  return rem === 0 ? `${ft}′` : `${ft}′ ${rem}″`;
+}
+
+function dirtTotalYd3() {
+  let t = 0;
+  deckDirtGroup.children.forEach(m => { const g = m.geometry.parameters; t += g.width * g.height * g.depth / 27; });
+  approachGroup.children.forEach(m => { t += m.userData.yd3 || 0; });
+  return t;
+}
+
+function footerSummary(row) {
+  const counts = {};
+  row.forEach(l => { counts[l] = (counts[l] || 0) + 1; });
+  return Object.keys(counts).map(Number).sort((a, b) => b - a).map(l => `${counts[l]} × ${fmtFtIn(l)}`).join(' + ');
+}
+
+const fmtVal = d => d.fmt ? d.fmt(P[d.key]) : `${P[d.key]}${d.unit ?? '″'}`;
+function paramRow(d) {
+  if (d.group) return `<div class="param-group" id="g_${d.group.replace(/\W/g, '')}">${d.group}</div>`;
+  return `<div class="param" id="row_${d.key}">
+    <label for="p_${d.key}">${d.label}</label>
+    <input type="range" id="p_${d.key}" data-key="${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${P[d.key]}">
+    <span class="val" id="v_${d.key}">${fmtVal(d)}</span>
+  </div>`;
+}
+function buildParamUI() {
+  const body = document.getElementById('paramBody');
+  body.innerHTML =
+    PARAM_DEFS.filter(d => !d.adv).map(paramRow).join('') +
+    `<button class="btn" id="advToggle">Advanced</button>
+     <div id="advBody" hidden>${PARAM_DEFS.filter(d => d.adv).map(paramRow).join('')}</div>`;
+  body.querySelectorAll('input[type=range]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      P[e.target.dataset.key] = parseFloat(e.target.value);
+      if (e.target.dataset.key === 'W') applyWidthPreset();
+      build();
+    });
+  });
+  document.getElementById('advToggle').addEventListener('click', e => {
+    const adv = document.getElementById('advBody');
+    adv.hidden = !adv.hidden;
+    e.currentTarget.classList.toggle('active', !adv.hidden);
+  });
+}
+
+function updateParams() {
+  const beam = isBeam();
+  PARAM_DEFS.forEach(d => {
+    if (!d.key) return;
+    document.getElementById(`p_${d.key}`).value = P[d.key];
+    document.getElementById(`v_${d.key}`).textContent = fmtVal(d);
+    document.getElementById(`row_${d.key}`).hidden = (d.frameOnly && beam) || (d.beamOnly && !beam);
+  });
+  document.querySelector('label[for=p_DECK_T]').textContent = beam ? 'Beam thick' : 'Deck thick';
+  const dv = derive();
+  document.getElementById('statsBody').innerHTML = `
+    <div class="stat"><span class="label">Format</span><span class="count">${beam ? `${fmtFtIn(P.W)} beam · ${P.D}″ × ${P.DECK_T}″` : `${fmtFtIn(P.W)} legged frame`}</span></div>
+    <div class="stat"><span class="label">Overall height</span><span class="count">${fmtFtIn(dv.H)}</span></div>
+    ${beam
+      ? `<div class="stat"><span class="label">Clear span (${P.BEAM_BEARING}″ bearing)</span><span class="count">${fmtFtIn(dv.clearBottom)}</span></div>`
+      : `<div class="stat"><span class="label">Clear opening (bottom / soffit)</span><span class="count">${dv.clearBottom}″ / ${Math.max(dv.clearSoffit, 0)}″</span></div>`}
+    <div class="stat"><span class="label">Tie channels (from center)</span><span class="count">${dv.channelXs.map(x => x === 0 ? 'ctr' : `${x > 0 ? '+' : ''}${x}″`).join(' · ')}${dv.channelXs[2] !== P.W / 2 - P.CHANNEL_INSET ? ' (even)' : ''}</span></div>
+    <div class="stat"><span class="label">Ready rod</span><span class="count">3 × ${P.ROD_D}″ × ${fmtFtIn(dv.runLen + 2 * P.ROD_STICKOUT)}</span></div>
+    <div class="stat"><span class="label">Run length</span><span class="count">${P.N} × ${fmtFtIn(P.D)} = ${fmtFtIn(dv.runLen)}</span></div>
+    <div class="stat"><span class="label">Footer blocks / side</span><span class="count">${footerSummary(dv.footerRow)}</span></div>
+    <div class="stat"><span class="label">Footer total</span><span class="count">${2 * dv.blocksPerSide} blocks · ${fmtFtIn(dv.footerRow.reduce((a, b) => a + b, 0))} row</span></div>
+    <div class="stat"><span class="label">Concrete / section</span><span class="count">${dv.volumeFt3.toFixed(2)} ft³ · ${(dv.volumeFt3 / 27).toFixed(3)} yd³</span></div>
+    <div class="stat"><span class="label">Weight / section @ ${CONCRETE_PCF} pcf</span><span class="count">${Math.round(dv.weightLb).toLocaleString()} lb</span></div>
+    <div class="stat"><span class="label">Curbs</span><span class="count">${dv.curbs.list.length} × ${fmtFtIn(P.CURB.len)} (${dv.curbs.perSide}/side) · ${Math.round(dv.curbs.weightLb).toLocaleString()} lb ea</span></div>
+    <div class="stat"><span class="label">Dowels</span><span class="count">${dv.curbs.list.length * P.CURB.dowel.count} drilled · ${dv.curbs.blindDowels} blind</span></div>
+    ${state.showDirt ? `<div class="stat"><span class="label">Fill (deck + approaches)</span><span class="count">${dirtTotalYd3().toFixed(1)} yd³</span></div>` : ''}
+    <div class="stat"><span class="label">Weight, all sections</span><span class="count">${Math.round(dv.weightLb * P.N).toLocaleString()} lb</span></div>`;
+
+  const warns = [];
+  if (!beam) {
+    if (dv.clearBottom <= 0) warns.push('Feet overlap: 2 × foot width ≥ overall width.');
+    else if (dv.clearSoffit <= 0) warns.push('Legs meet at the soffit: 2 × leg top width ≥ overall width.');
+    if (P.LEG_TOP_W < P.LEG_W) warns.push('Reverse taper: leg is wider at the foot than at the deck.');
+    if (!dv.footFitsBlock) warns.push(`Foot + clearance (${P.LEG_W + 2 * P.CLEAR}″) wider than the ${P.BLOCK_T}″ block.`);
+    if (P.POCKET_D >= P.BLOCK_H) warns.push('Pocket deeper than the block.');
+  } else if (P.BEAM_BEARING > P.BLOCK_T) warns.push(`Bearing (${P.BEAM_BEARING}″) longer than the ${P.BLOCK_T}″ block.`);
+  if (dv.curbs.blindDowels > 0) warns.push(`${dv.curbs.blindDowels} curb dowels land over the ${beam ? 'footer blocks' : 'legs'}: blind holes, no washer below.`);
+  const wb = document.getElementById('warnBox');
+  wb.textContent = warns.join(' ');
+  wb.classList.toggle('show', warns.length > 0);
+}
+
+function updateHeader() {
+  const dv = derive();
+  document.getElementById('dimsLabel').textContent =
+    dv.beam
+      ? `${fmtFtIn(P.W)} span · ${P.N} beams ${P.D}″ × ${P.DECK_T}″ on flat-top blocks · ${fmtFtIn(dv.runLen)} roadway`
+      : `${fmtFtIn(P.W)} span × ${fmtFtIn(P.D)} × ${fmtFtIn(dv.H)} H · ${P.DECK_T}″ deck · ${P.LEG_W}″ feet tapering to ${P.LEG_TOP_W}″ · ${P.N} sections = ${fmtFtIn(dv.runLen)} roadway`;
+  document.getElementById('stackLabel').textContent = dv.beam
+    ? 'precast beams · bearing on flat-top footer blocks · tied with ready rod'
+    : 'precast rigid frame · tapered legs · feet seated in a groove in the footer blocks';
+  document.title = `Haunch Bridge Unit — ${fmtFtIn(P.W)} span · ${P.N} ${dv.beam ? 'beams' : 'sections'}`;
+}
+
+// 2-D section with dimension strings, drawn from the same point list as the 3-D model.
+function updateSection() {
+  const svg = document.getElementById('sectionSvg');
+  const dv = derive();
+  const pts = sectionPoints();
+  const VW = 300, VH = 220;
+  const padL = 34, padR = 34, padT = 26, padB = 44;
+  const extentW = 2 * (dv.footX + P.BLOCK_T / 2);
+  const extentH = dv.H + (state.showBlocks ? P.BLOCK_H - dv.pocketD : 0) + 6;
+  const s = Math.min((VW - padL - padR) / extentW, (VH - padT - padB) / extentH);
+  const cx = VW / 2;
+  const baseY = VH - padB;                 // ground line (bottom of blocks)
+  const footY = state.showBlocks ? P.BLOCK_H - dv.pocketD : 0;
+  const X = x => cx + x * s;
+  const Y = y => baseY - (y + footY) * s;  // y in unit-local inches → svg
+  const Yb = y => baseY - y * s;           // block-local
+
+  let out = '';
+  // Wall blocks (dashed) with the pocket notch
+  if (state.showBlocks) {
+    const fx = dv.footX, pd = dv.pocketD;
+    const pw = P.LEG_W + 2 * P.CLEAR;
+    [-1, 1].forEach(sg => {
+      const c = sg * fx, l = c - P.BLOCK_T / 2, r = c + P.BLOCK_T / 2;
+      const pl = c - pw / 2, pr = c + pw / 2;
+      const d = pd > 0 ? [
+        `M${X(l)},${Yb(0)}`, `L${X(l)},${Yb(P.BLOCK_H)}`, `L${X(pl)},${Yb(P.BLOCK_H)}`,
+        `L${X(pl)},${Yb(P.BLOCK_H - pd)}`, `L${X(pr)},${Yb(P.BLOCK_H - pd)}`,
+        `L${X(pr)},${Yb(P.BLOCK_H)}`, `L${X(r)},${Yb(P.BLOCK_H)}`, `L${X(r)},${Yb(0)}`, 'Z',
+      ].join(' ') : [
+        `M${X(l)},${Yb(0)}`, `L${X(l)},${Yb(P.BLOCK_H)}`, `L${X(r)},${Yb(P.BLOCK_H)}`, `L${X(r)},${Yb(0)}`, 'Z',
+      ].join(' ');
+      out += `<path class="block" d="${d}"/>`;
+    });
+  }
+  // Dirt cover (when shown) as a band on the deck
+  if (state.showDirt) {
+    out += `<rect class="dirt" x="${X(-P.W / 2)}" y="${Y(dv.H + P.DIRT_T)}" width="${P.W * s}" height="${P.DIRT_T * s}"/>`;
+  }
+  // Cut section, with the tie channel holes
+  out += `<polygon class="cut" points="${pts.map(([x, y]) => `${X(x)},${Y(y)}`).join(' ')}"/>`;
+  dv.channelXs.forEach(x => {
+    out += `<circle class="hole" cx="${X(x)}" cy="${Y(dv.channelY)}" r="${P.HOLE_D / 2 * s}"/>`;
+  });
+
+  // Dimension helper: a line with ticks and a label, offset perpendicular.
+  function dim(x1, y1, x2, y2, label, off, vertical = false) {
+    const ox = vertical ? off : 0, oy = vertical ? 0 : off;
+    const ax = x1 + ox, ay = y1 + oy, bx = x2 + ox, by = y2 + oy;
+    const tick = 3;
+    let g = `<line class="dim" x1="${x1}" y1="${y1}" x2="${ax}" y2="${ay}"/>` +
+            `<line class="dim" x1="${x2}" y1="${y2}" x2="${bx}" y2="${by}"/>` +
+            `<line class="dim" x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}"/>`;
+    if (vertical) {
+      g += `<line class="dim" x1="${ax - tick}" y1="${ay}" x2="${ax + tick}" y2="${ay}"/>` +
+           `<line class="dim" x1="${bx - tick}" y1="${by}" x2="${bx + tick}" y2="${by}"/>` +
+           `<text class="dimtxt" x="${ax + (off > 0 ? 4 : -4)}" y="${(ay + by) / 2 + 3}" text-anchor="${off > 0 ? 'start' : 'end'}">${label}</text>`;
+    } else {
+      g += `<line class="dim" x1="${ax}" y1="${ay - tick}" x2="${ax}" y2="${ay + tick}"/>` +
+           `<line class="dim" x1="${bx}" y1="${by - tick}" x2="${bx}" y2="${by + tick}"/>` +
+           `<text class="dimtxt" x="${(ax + bx) / 2}" y="${ay + (off > 0 ? 10 : -3)}" text-anchor="middle">${label}</text>`;
+    }
+    return g;
+  }
+
+  const w = P.W / 2, a = w - P.LEG_W, t = Math.max(w - P.LEG_TOP_W, 0);
+  const topY = Y(dv.H), botY = Y(0);
+  // Overall width above the deck
+  out += dim(X(-w), topY, X(w), topY, `${P.W}″`, -10);
+  // Overall height, right side
+  out += dim(X(w), botY, X(w), topY, `${dv.H}″`, 12, true);
+  // Channel spacing along the deck top
+  if (dv.channelXs[2] > 0) out += dim(X(dv.channelXs[2]), Y(dv.channelY), X(w), Y(dv.channelY), `${(P.W / 2 - dv.channelXs[2])}″`, -(P.DECK_T / 2 + 1) * s);
+  const belowY = Yb(0) + 4;
+  if (dv.beam) {
+    // Bearing on the block and clear span
+    if (state.showBlocks) out += dim(X(w - P.BEAM_BEARING), belowY, X(w), belowY, `${P.BEAM_BEARING}″ brg`, 8);
+    out += dim(X(-(w - P.BEAM_BEARING)), belowY, X(w - P.BEAM_BEARING), belowY, `${fmtFtIn(dv.clearBottom)} clr`, 8);
+  } else {
+    // Deck thickness, left side
+    out += dim(X(-w), Y(dv.H - P.DECK_T), X(-w), topY, `${P.DECK_T}″`, -12, true);
+    // Leg height inside the opening, and leg width at the soffit
+    out += dim(X(t), botY, X(t), Y(P.LEG_H), `${P.LEG_H}″`, -8, true);
+    if (dv.clearSoffit > 0) out += dim(X(t), Y(P.LEG_H), X(w), Y(P.LEG_H), `${P.LEG_TOP_W}″`, 8);
+    // Foot width and clear opening below the base line
+    out += dim(X(w - P.LEG_W), belowY, X(w), belowY, `${P.LEG_W}″`, 8);
+    if (dv.clearBottom > 0) out += dim(X(-a), belowY, X(a), belowY, `${dv.clearBottom}″ clr`, 8);
+    if (state.showBlocks) out += dim(X(w), Yb(P.BLOCK_H), X(w), Yb(P.BLOCK_H - dv.pocketD), `${dv.pocketD}″`, 26, true);
+  }
+
+  svg.innerHTML = out;
+}
+
+// ============================================================
+// UI wiring
+// ============================================================
+buildParamUI();
+build();
+
+document.getElementById('blocksToggle').addEventListener('click', e => {
+  state.showBlocks = !state.showBlocks;
+  e.currentTarget.classList.toggle('active', state.showBlocks);
+  build();
+});
+document.getElementById('dirtToggle').addEventListener('click', e => {
+  state.showDirt = !state.showDirt;
+  e.currentTarget.classList.toggle('active', state.showDirt);
+  build();
+});
+document.getElementById('rodsToggle').addEventListener('click', e => {
+  state.showRods = !state.showRods;
+  e.currentTarget.classList.toggle('active', state.showRods);
+  applyState();
+});
+document.getElementById('curbsToggle').addEventListener('click', e => {
+  state.showCurbs = !state.showCurbs;
+  e.currentTarget.classList.toggle('active', state.showCurbs);
+  build();
+});
+document.getElementById('explodeToggle').addEventListener('click', e => {
+  state.lifted = !state.lifted;
+  e.currentTarget.classList.toggle('active', state.lifted);
+  applyState();
+});
+document.getElementById('resetToggle').addEventListener('click', () => {
+  Object.assign(P, DEFAULTS);
+  state.showBlocks = true; state.showRods = true; state.showCurbs = true; state.showDirt = false; state.lifted = false;
+  document.getElementById('curbsToggle').classList.add('active');
+  document.getElementById('dirtToggle').classList.remove('active');
+  document.getElementById('blocksToggle').classList.add('active');
+  document.getElementById('rodsToggle').classList.add('active');
+  document.getElementById('explodeToggle').classList.remove('active');
+  build();
+  setView('iso');
+});
+
+function presets() {
+  const { H } = derive();
+  const cy = frameRestY() + H * IN / 2;
+  const t = new THREE.Vector3(0, cy, 0);
+  const dv = derive();
+  const r = Math.max(P.W + (state.showDirt ? P.APPROACH_SHOW * 0.6 : 0), dv.runLen, dv.footerRow.reduce((a, b) => a + b, 0)) * IN * 1.6;
+  return {
+    iso:   { pos: new THREE.Vector3(r * 0.8, r * 0.55, r),       target: t },
+    front: { pos: new THREE.Vector3(0, cy, r * 1.3),             target: t },   // looking at the section profile
+    side:  { pos: new THREE.Vector3(r * 1.3, cy, 0),             target: t },
+    top:   { pos: new THREE.Vector3(0, r * 1.6, 0.001),          target: t },
+    under: { pos: new THREE.Vector3(r * 0.5, frameRestY() + 0.4, r * 0.9), target: new THREE.Vector3(0, frameRestY() + 0.3, 0) },
+  };
+}
+function animateCamera(preset, duration = 600) {
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const startTime = performance.now();
+  function step() {
+    const t = Math.min((performance.now() - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    camera.position.lerpVectors(startPos, preset.pos, eased);
+    controls.target.lerpVectors(startTarget, preset.target, eased);
+    controls.update();
+    if (t < 1) requestAnimationFrame(step);
+  }
+  step();
+}
+function setView(name) {
+  animateCamera(presets()[name]);
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+}
+document.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', e => setView(e.currentTarget.dataset.view)));
+// URL hash: a view name (#iso, #front, #side, #top, #under) and/or "dirt"
+// to open with the dirt & approach option on, e.g. #front,dirt.
+// A "w<inches>" token (e.g. w240) picks the span.
+const hashTokens = location.hash.slice(1).split(',').filter(Boolean);
+const wTok = hashTokens.find(t => /^w\d+$/i.test(t));
+if (wTok) { P.W = parseInt(wTok.slice(1)); applyWidthPreset(); }
+if (hashTokens.includes('dirt')) { state.showDirt = true; document.getElementById('dirtToggle').classList.add('active'); }
+if (wTok || state.showDirt) build();
+const hashView = hashTokens.find(t => t in presets());
+setView(hashView || 'iso');
+
+// Hover tooltip (desktop only).
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+let isTouch = false;
+window.addEventListener('touchstart', () => { isTouch = true; }, { once: true });
+function findNamed(o) { while (o && !o.userData?.name) o = o.parent; return o; }
+function findSection(o) { while (o && o.userData?.kind !== 'frame') o = o.parent; return o; }
+renderer.domElement.addEventListener('pointermove', e => {
+  if (isTouch) return;
+  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(pickables, true);
+  if (hits.length) {
+    const o = findNamed(hits[0].object);
+    if (o) {
+      const dv = derive();
+      const sec = findSection(o);
+      tooltip.innerHTML = o.userData.kind === 'dirt'
+        ? `<strong>${o.userData.name}</strong> · ${o.userData.sub}`
+        : o.userData.kind === 'curb'
+        ? `<strong>${o.userData.name}</strong> · ${fmtFtIn(P.CURB.len)} × ${P.CURB.w}″ × ${P.CURB.h}″ · ${P.CURB.haunch}″ 45° top chamfers · ~${Math.round(dv.curbs.weightLb).toLocaleString()} lb · ${P.CURB.dowel.count} ${P.CURB.dowel.label}s`
+        : o.userData.kind === 'dowel'
+        ? `<strong>${P.CURB.dowel.label}</strong> · ${P.CURB.dowel.embed}″ embedded · through a field-drilled hole · ${o.userData.clear ? 'washer welded below' : 'blind: lands over the leg'}`
+        : o.userData.kind === 'washer'
+        ? `<strong>Welded washer</strong> · ${P.CURB.washer.od}″Ø under the deck · cut to replace the curb`
+        : o.userData.kind === 'hook'
+        ? `<strong>Lifting hook</strong> · ${sec ? sec.userData.name : ''} · ${P.HOOK_ROD_D}″ loop in ${P.HOOK_POCKET_D}″ × ${P.HOOK_POCKET_DEPTH}″ recess`
+        : o.userData.kind === 'rod'
+        ? `<strong>Ready rod</strong> · ${P.ROD_D}″ through 1.5″ PVC sleeves · washer + hex nut each end`
+        : o.userData.kind === 'frame'
+        ? `<strong>${o.userData.name}</strong> · ${fmtFtIn(P.W)} × ${fmtFtIn(P.D)} × ${fmtFtIn(dv.H)} · ${Math.round(dv.weightLb).toLocaleString()} lb`
+        : `<strong>${o.userData.name}</strong> · ${fmtFtIn(o.userData.lengthIn)} × ${fmtFtIn(P.BLOCK_T)} × ${fmtFtIn(P.BLOCK_H)} · ${dv.beam ? 'flat top' : `${P.POCKET_D}″ groove`}`;
+      tooltip.style.left = e.clientX + 'px';
+      tooltip.style.top = e.clientY + 'px';
+      tooltip.style.display = 'block';
+      return;
+    }
+  }
+  tooltip.style.display = 'none';
+});
+renderer.domElement.addEventListener('pointerleave', () => { tooltip.style.display = 'none'; });
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 100));
+
+function tick() {
+  requestAnimationFrame(tick);
+  if (approachMat.userData.pending && approachMat.userData.fadeStart) {
+    approachMat.userData.fadeStart.value = approachMat.userData.pending[0];
+    approachMat.userData.fadeEnd.value   = approachMat.userData.pending[1];
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>

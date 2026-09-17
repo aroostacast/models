@@ -83,6 +83,15 @@
     font-size: 18px; color: #2d3748; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
   .pl-close:active { transform: scale(0.96); }
+  .pl-print {
+    margin-left: auto; height: 42px; padding: 0 14px; border-radius: 11px;
+    background: rgba(15,23,42,0.06); border: 1px solid rgba(15,23,42,0.12);
+    font-size: 14px; font-weight: 600; color: #2d3748; cursor: pointer; font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pl-print:active { transform: scale(0.96); }
+  .pl-print + .pl-close { margin-left: 8px; }
+  .pl-sub { display: none; }
   .pl-wrap { max-width: 720px; margin: 0 auto; padding: 16px 14px 48px; }
   .pl-summary {
     background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 14px;
@@ -94,6 +103,22 @@
   .pl-progress-fill { height: 100%; background: #22c55e; transition: width 0.25s ease; }
   .pl-progress-text { font-size: 13px; color: #4a5568; font-variant-numeric: tabular-nums; }
   .pl-note { font-size: 12px; color: #718096; margin: 12px 0 4px; line-height: 1.5; }
+  .pl-recon-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .pl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .pl-table th, .pl-table td {
+    padding: 6px 8px; text-align: right;
+    border-bottom: 1px solid rgba(15,23,42,0.08);
+    font-variant-numeric: tabular-nums;
+  }
+  .pl-table th:first-child, .pl-table td:first-child { text-align: left; }
+  .pl-table th {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: #718096;
+  }
+  .pl-table tr:last-child td { border-bottom: none; }
+  .pl-left { font-weight: 700; color: #1d4ed8; }
+  .pl-extra { color: #b45309; font-weight: 600; }
+  .pl-done { color: #16a34a; font-weight: 600; }
   .pl-reset {
     margin-top: 10px; background: rgba(239,68,68,0.08); color: #b91c1c;
     border: 1px solid rgba(239,68,68,0.25); border-radius: 9px;
@@ -269,6 +294,36 @@
       padding: 8px;
     }
     .btn { font-size: 11px; padding: 7px 8px; min-height: 34px; }
+  }
+
+  /* ── Print: the open pick list becomes a plain flowing document that
+     paginates naturally; the 3D scene and panels are hidden. ── */
+  @media print {
+    @page { margin: 0.5in; }
+    html, body { overflow: visible !important; height: auto !important; }
+    body.pl-open canvas, body.pl-open #header, body.pl-open #legend,
+    body.pl-open #controls, body.pl-open #cameraBtns, body.pl-open #tooltip { display: none !important; }
+    #pickList { position: static; overflow: visible; background: #fff; }
+    .pl-top {
+      position: static; padding: 0 0 12px; border-bottom: none;
+      background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none;
+    }
+    .pl-sub { display: inline; font-size: 13px; font-weight: 400; color: #4a5568; }
+    .pl-close, .pl-print, .pl-reset { display: none !important; }
+    .pl-wrap { max-width: none; padding: 0; }
+    .pl-summary, .pl-load { box-shadow: none; border: 1px solid #94a3b8; }
+    .pl-summary { break-inside: avoid; page-break-inside: avoid; }
+    .pl-table th, .pl-table td { padding: 4px 8px; border-bottom: 1px solid #cbd5e1; }
+    .pl-load { break-inside: avoid; page-break-inside: avoid; margin-bottom: 10px; }
+    .pl-row { min-height: 0; padding: 3px 8px; break-inside: avoid; page-break-inside: avoid; }
+    .pl-row-label { font-size: 13px; }
+    .pl-row-sub { font-size: 11px; margin-top: 0; }
+    /* Check boxes must survive printers that drop backgrounds: outlined box,
+       green check glyph instead of white-on-green. */
+    .pl-check { width: 18px; height: 18px; border-radius: 4px; font-size: 13px; border-color: #475569; color: #16a34a; }
+    .pl-row.done .pl-check { background: #fff; border-color: #16a34a; }
+    .pl-progress, .pl-load-bar { border: 1px solid #cbd5e1; }
+    .pl-progress-fill, .pl-load-fill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 </head>
@@ -1237,86 +1292,172 @@ window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', () => setTimeout(onResize, 100));
 
 // ============================================================
-// DELIVERY PICK LIST — loads in build order, ≤ 70k lb, with a saved checklist.
+// DELIVERY PICK LIST — inventory reconciliation + remaining loads.
+// The yard pickups ran out of build order, so the list works from the
+// actual-taken inventory (TAKEN below): blocks on site are assumed to fill
+// the earliest build positions they fit; the positions left over are the
+// blocks still to take.
 // ============================================================
-const TRUCK_MAX  = 70000;          // lb per load
 const LB_PER_FT  = 3500 / 6;       // a 6' block = 3500 lb; weight scales with length
 // Footers are half-height (1' vs 2'), so half the weight per foot of length.
 const blockWeight = (type) => TYPE_WIDTH[type] * LB_PER_FT * (type === 'footer' ? FOOTING_H / COURSE_H : 1);
-const PICK_KEY = 'sixCourseWall.pickList.v2';
+const PICK_KEY = 'sixCourseWall.pickList.v4';
 let picked = {};
 try { picked = JSON.parse(localStorage.getItem(PICK_KEY)) || {}; } catch (e) { picked = {}; }
 function savePicked() { try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch (e) {} }
 const fmtLb = (n) => Math.round(n).toLocaleString();
 
-// One abutment's blocks, in build order, greedy-packed into ≤ TRUCK_MAX loads.
+// Flat-top (cast studless): flagged blocks plus the entire top course.
+const isFlat = (b) => !b.footing && (b.flatTop || b.course === N_COURSES - 1);
+const invKey = (b) => b.type + '|' + (isFlat(b) ? 'flat' : 'std');
+const keyLabel = (k) => {
+  const [t, f] = k.split('|');
+  return TYPE_NAMES[t] + (f === 'flat' ? ' · flat top' : '');
+};
+
+// Yard reconciliation, July 16 2026 — everything taken to date.
+const TAKEN = {
+  'reg6|std': 87, 'reg6|flat': 8,
+  'end6|std': 13, 'end6|flat': 6,
+  'end4|std': 0,
+  'reg5|std': 3,
+  'reg4|std': 3, 'reg4|flat': 1,
+  'reg3|std': 0,
+  'reg2|std': 4, 'reg2|flat': 5,
+  'footer|std': 22,
+};
+const RECON_ORDER = ['reg6|std', 'reg6|flat', 'end6|std', 'end6|flat', 'end4|std',
+                     'reg5|std', 'reg4|std', 'reg4|flat', 'reg3|std', 'reg2|std',
+                     'reg2|flat', 'footer|std'];
+
+// Walk both abutments in build order, consuming the on-site inventory; the
+// positions it can't fill are the blocks still to take. Leftover stock =
+// extras on site (flat-tops can't sub for studded blocks — nothing stacks
+// on a studless top).
+function computeRemaining() {
+  const sideA = BLOCKS.filter(b => !b.wall);
+  const all = [...sideA.map(b => ({ ...b, side: 1 })), ...sideA.map(b => ({ ...b, side: 2 }))];
+  const stock = { ...TAKEN };
+  const remaining = [];
+  for (const b of all) {
+    const k = invKey(b);
+    if ((stock[k] || 0) > 0) stock[k]--;
+    else remaining.push(b);
+  }
+  return { all, remaining, extras: stock };
+}
+
+// Remaining blocks greedy-packed to the 70k truck's nominal 70,000 lb over
+// two runs — the ~2k grace stays in reserve (load 2 lands at exactly 70,000).
+const LOAD_TRUCK = { name: '70k truck', max: 70000 };
 function computeLoads() {
-  const wall = BLOCKS.filter(b => !b.wall);
+  const { remaining } = computeRemaining();
   const loads = [];
-  let cur = { weight: 0, blocks: [] };
-  for (const b of wall) {
+  let cur = { truck: LOAD_TRUCK, weight: 0, blocks: [] };
+  for (const b of remaining) {
     const w = blockWeight(b.type);
-    if (cur.blocks.length && cur.weight + w > TRUCK_MAX) { loads.push(cur); cur = { weight: 0, blocks: [] }; }
+    // Weights are multiples of 3500/6 — epsilon keeps float drift from
+    // spilling an exactly-70,000 lb load into a phantom extra trip.
+    if (cur.blocks.length && cur.weight + w > LOAD_TRUCK.max + 1e-6) {
+      loads.push(cur);
+      cur = { truck: LOAD_TRUCK, weight: 0, blocks: [] };
+    }
     cur.weight += w; cur.blocks.push(b);
   }
   if (cur.blocks.length) loads.push(cur);
   return loads;
 }
-// Group a load's blocks into (course, type) lines, biggest blocks first.
+// Group a load's blocks into (side, course, type, finish) lines — flat-top
+// blocks are a separate cast variant, so they get their own line items.
 function loadLines(load) {
   const map = new Map();
-  for (const b of load.blocks) { const k = (b.footing ? -1 : b.course) + '|' + b.type; map.set(k, (map.get(k) || 0) + 1); }
+  for (const b of load.blocks) {
+    const k = [b.side, b.footing ? -1 : b.course, b.type, isFlat(b) ? 'flat' : 'std'].join('|');
+    map.set(k, (map.get(k) || 0) + 1);
+  }
   return [...map.entries()].map(([k, count]) => {
-    const [course, type] = k.split('|');
-    return { course: +course, type, count, weight: count * blockWeight(type) };
-  }).sort((a, b) => a.course - b.course || TYPE_WIDTH[b.type] - TYPE_WIDTH[a.type]);
+    const [side, course, type, finish] = k.split('|');
+    return { side: +side, course: +course, type, flat: finish === 'flat', count, weight: count * blockWeight(type) };
+  }).sort((a, b) => a.side - b.side || a.course - b.course || TYPE_WIDTH[b.type] - TYPE_WIDTH[a.type]);
 }
 
 const pickListEl = document.getElementById('pickList');
 function renderPickList() {
+  const { all, remaining, extras } = computeRemaining();
   const loads = computeLoads();
-  let totBlocks = 0, totWeight = 0, gotBlocks = 0;
+  const totalBlocks = all.length;
+  const totalLb = all.reduce((s, b) => s + blockWeight(b.type), 0);
+  const remainingLb = remaining.reduce((s, b) => s + blockWeight(b.type), 0);
+  const filled = totalBlocks - remaining.length;
+  const takenCount = Object.values(TAKEN).reduce((a, c) => a + c, 0);
+  const extraCount = Object.values(extras).reduce((a, c) => a + c, 0);
+  const extraList = Object.entries(extras).filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n}× ${keyLabel(k)}`).join(', ');
+
+  // Reconciliation table — design bill vs taken vs left, per block variant.
+  const needed = {}, left = {};
+  all.forEach(b => { const k = invKey(b); needed[k] = (needed[k] || 0) + 1; });
+  remaining.forEach(b => { const k = invKey(b); left[k] = (left[k] || 0) + 1; });
+  const reconRows = RECON_ORDER.map(k => {
+    const l = left[k] || 0, x = extras[k] || 0;
+    const cell = l > 0 ? `<span class="pl-left">${l}</span>`
+      : x > 0 ? `<span class="pl-extra">0 · ${x} extra</span>`
+      : `<span class="pl-done">0 ✓</span>`;
+    return `<tr><td>${keyLabel(k)}</td><td>${needed[k] || 0}</td><td>${TAKEN[k] || 0}</td><td>${cell}</td></tr>`;
+  }).join('');
+
+  let gotBlocks = 0;
   const cards = loads.map((load, li) => {
+    const sides = [...new Set(load.blocks.map(b => b.side))];
+    const sideLabel = sides.length === 1 ? `Side ${sides[0]}` : 'Sides 1–2';
     const cs = [...new Set(load.blocks.map(b => b.footing ? 0 : b.course + 1))].sort((a, b) => a - b);
-    const csName = c => c === 0 ? 'Footing' : `Course ${c}`;
-    const courseLabel = cs.length === 1 ? csName(cs[0])
-      : cs[0] === 0 ? `Footing–Course ${cs[cs.length - 1]}`
-      : `Courses ${cs[0]}–${cs[cs.length - 1]}`;
+    const csName = c => c === 0 ? 'Footing' : `C${c}`;
+    const range = cs.length === 1 ? csName(cs[0]) : `${csName(cs[0])}–${csName(cs[cs.length - 1])}`;
     const rows = loadLines(load).map(ln => {
-      const key = `L${li}-${ln.course}-${ln.type}`;
+      const key = `L${li}-${ln.side}-${ln.course}-${ln.type}-${ln.flat ? 'F' : 'S'}`;
       const done = !!picked[key];
-      totBlocks += ln.count; totWeight += ln.weight; if (done) gotBlocks += ln.count;
+      if (done) gotBlocks += ln.count;
       return `<div class="pl-row${done ? ' done' : ''}" data-key="${key}">
         <div class="pl-check">${done ? '✓' : ''}</div>
         <div class="pl-row-main">
-          <div class="pl-row-label">${ln.course < 0 ? 'Footing' : `Course ${ln.course + 1}`} · ${TYPE_NAMES[ln.type]}</div>
+          <div class="pl-row-label">Side ${ln.side} · ${ln.course < 0 ? 'Footing' : `Course ${ln.course + 1}`} · ${TYPE_NAMES[ln.type]}${ln.flat ? ' · flat top' : ''}</div>
           <div class="pl-row-sub">×${ln.count} · ${fmtLb(ln.weight)} lb</div>
         </div>
       </div>`;
     }).join('');
-    const pct = Math.round(load.weight / TRUCK_MAX * 100);
+    const pct = Math.round(load.weight / load.truck.max * 100);
     return `<div class="pl-load">
       <div class="pl-load-head">
-        <div class="pl-load-name">Load ${li + 1}</div>
-        <div class="pl-load-meta">${courseLabel} · ${fmtLb(load.weight)} / ${fmtLb(TRUCK_MAX)} lb</div>
+        <div class="pl-load-name">Load ${li + 1} — ${load.truck.name}</div>
+        <div class="pl-load-meta">${sideLabel} · ${range} · ${fmtLb(load.weight)} / ${fmtLb(load.truck.max)} lb</div>
       </div>
       <div class="pl-load-bar"><div class="pl-load-fill" style="width:${pct}%"></div></div>
       <div class="pl-rows">${rows}</div>
     </div>`;
   }).join('');
-  const gotPct = totBlocks ? Math.round(gotBlocks / totBlocks * 100) : 0;
+  const gotPct = Math.round((filled + gotBlocks) / totalBlocks * 100);
   pickListEl.innerHTML = `
     <div class="pl-top">
-      <div class="pl-title">Delivery Pick List</div>
+      <div class="pl-title">Delivery Pick List <span class="pl-sub">— Six-Course Wing Wall bridge</span></div>
+      <button class="pl-print" aria-label="Print">🖨 Print</button>
       <button class="pl-close" aria-label="Close">✕</button>
     </div>
     <div class="pl-wrap">
       <div class="pl-summary">
-        <div class="pl-summary-line">One abutment · <strong>${totBlocks}</strong> blocks · <strong>${fmtLb(totWeight)}</strong> lb · <strong>${loads.length}</strong> loads <span class="pl-dim">(≤ ${fmtLb(TRUCK_MAX)} lb each)</span></div>
+        <div class="pl-summary-line">Both abutments · <strong>${totalBlocks}</strong> blocks · <strong>${fmtLb(totalLb)}</strong> lb</div>
+        <div class="pl-summary-line" style="margin-top:4px">Taken to date: <strong>${takenCount}</strong> blocks (${extraCount} extra) · Left to take: <strong>${remaining.length}</strong> blocks · <strong>${fmtLb(remainingLb)}</strong> lb in ${loads.length} loads</div>
         <div class="pl-progress"><div class="pl-progress-fill" style="width:${gotPct}%"></div></div>
-        <div class="pl-progress-text">${gotBlocks} of ${totBlocks} blocks picked up · ${gotPct}%</div>
-        <div class="pl-note">Loads are in build order — build each as it arrives. The opposing abutment is identical (repeat the runs); bridge beams, bearings &amp; deck ship separately.</div>
+        <div class="pl-progress-text">${filled + gotBlocks} of ${totalBlocks} block positions covered · ${gotPct}%</div>
+        <div class="pl-note">Blocks on site are assumed to fill the earliest build positions they fit, so the loads below carry the latest positions. Both loads ride the 70k truck at or under its nominal 70,000 lb — the ~2k grace stays in reserve. “Flat top” blocks are the studless cast variant — pull them specifically. Beams, bearings &amp; deck ship separately.</div>
         <button class="pl-reset">Reset checklist</button>
+      </div>
+      <div class="pl-summary">
+        <div class="pl-recon-title">Reconciliation — design vs taken</div>
+        <table class="pl-table">
+          <thead><tr><th>Block</th><th>Needed</th><th>Taken</th><th>Left</th></tr></thead>
+          <tbody>${reconRows}</tbody>
+        </table>
+        <div class="pl-note">Extras on site: ${extraList || 'none'}. Flat-top extras can’t replace studded blocks — nothing stacks on a studless top. Return them or keep as spares.</div>
       </div>
       ${cards}
     </div>`;
@@ -1330,7 +1471,12 @@ pickListEl.addEventListener('click', (e) => {
     const st = pickListEl.scrollTop; renderPickList(); pickListEl.scrollTop = st;
     return;
   }
-  if (e.target.closest('.pl-close')) { pickListEl.classList.remove('open'); return; }
+  if (e.target.closest('.pl-print')) { window.print(); return; }
+  if (e.target.closest('.pl-close')) {
+    pickListEl.classList.remove('open');
+    document.body.classList.remove('pl-open');
+    return;
+  }
   if (e.target.closest('.pl-reset')) {
     if (confirm('Clear all picked-up checkmarks?')) {
       picked = {}; savePicked();
@@ -1342,6 +1488,7 @@ pickListEl.addEventListener('click', (e) => {
 document.getElementById('pickListBtn').addEventListener('click', () => {
   renderPickList();
   pickListEl.classList.add('open');
+  document.body.classList.add('pl-open');
   pickListEl.scrollTop = 0;
 });
 

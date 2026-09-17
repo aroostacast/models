@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Aggregate Bin Plan — 52' × 32' × 8'</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+    background: #f1f5f9;
+    color: #1a202c;
+    touch-action: none;
+    color-scheme: light;
+  }
+  canvas { display: block; }
+
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0.75));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 10px 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  #header h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: #1a202c; }
+  #header .dims { font-size: 12px; color: #4a5568; font-variant-numeric: tabular-nums; }
+  #header .stack { margin-left: auto; font-size: 11px; color: #718096; font-family: 'SF Mono', Menlo, monospace; }
+
+  .panel {
+    position: fixed;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 14px;
+    padding: 12px;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 4px 20px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.05);
+  }
+
+  #legend { top: 60px; right: 12px; min-width: 220px; max-width: 280px; }
+  #controls { bottom: 12px; left: 12px; max-width: 320px; }
+  #cameraBtns { bottom: 12px; right: 12px; }
+
+  .panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #718096;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-title-meta { font-size: 10px; color: #4a5568; text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 13px;
+  }
+  .legend-color {
+    width: 28px; height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,0.12);
+    box-shadow: inset 0 -2px 4px rgba(0,0,0,0.18);
+  }
+  .legend-label { flex: 1; color: #2d3748; }
+  .legend-count { font-weight: 700; font-variant-numeric: tabular-nums; color: #1a202c; }
+  .legend-detail { font-size: 11px; color: #718096; font-weight: 400; margin-left: 4px; }
+
+  .legend-total {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  .legend-total .label { color: #4a5568; }
+  .legend-total .count { font-weight: 700; font-variant-numeric: tabular-nums; color: #1a202c; }
+
+  .toggle-row, .btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn-row { margin-top: 6px; }
+
+  .btn {
+    background: rgba(15,23,42,0.04);
+    border: 1px solid rgba(15,23,42,0.1);
+    color: #2d3748;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    font-family: inherit;
+    min-height: 36px;
+    user-select: none;
+    -webkit-user-select: none;
+    flex: 1;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(15,23,42,0.08); border-color: rgba(15,23,42,0.15); }
+  .btn:active { transform: scale(0.97); }
+  .btn.active {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: white;
+  }
+  .btn.active:hover { background: #1d4ed8; }
+  .btn.muted { opacity: 0.4; }
+
+  #tooltip {
+    position: fixed;
+    background: rgba(15,23,42,0.95);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+    display: none;
+    z-index: 200;
+    transform: translate(12px, -32px);
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    #header h1 { font-size: 13px; }
+    #header .dims { font-size: 11px; }
+    #header .stack { display: none; }
+    #legend { top: 56px; right: 8px; min-width: 0; max-width: 48%; padding: 10px; }
+    #legend .legend-row { font-size: 11px; padding: 3px 0; gap: 8px; }
+    #legend .legend-color { width: 22px; height: 12px; }
+    #legend .legend-label { font-size: 11px; }
+    #controls { bottom: 8px; left: 8px; right: 8px; max-width: none; padding: 10px; }
+    #cameraBtns {
+      top: 56px;
+      bottom: auto;
+      right: auto;
+      left: 8px;
+      padding: 8px;
+    }
+    .btn { font-size: 11px; padding: 7px 8px; min-height: 34px; }
+  }
+
+  @media (max-width: 480px) {
+    #legend { font-size: 11px; max-width: 46%; }
+    #cameraBtns .panel-title { display: none; }
+    #cameraBtns { padding: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Aggregate Bin Plan</h1>
+  <div class="dims" id="dimsLabel">52' W × 32' D × 8' H</div>
+  <div class="stack">Stack: B′ → A → B′ → A</div>
+</div>
+
+<div id="legend" class="panel">
+  <div class="panel-title">
+    <span>Block Counts</span>
+    <span class="panel-title-meta" id="capStatus"></span>
+  </div>
+  <div id="legendBody"></div>
+</div>
+
+<div id="controls" class="panel">
+  <div class="panel-title">View</div>
+  <div class="toggle-row" id="courseToggles">
+    <button class="btn active" data-course="0">C1 B′</button>
+    <button class="btn active" data-course="1">C2 A</button>
+    <button class="btn active" data-course="2">C3 B′</button>
+    <button class="btn active" data-course="3">C4 A</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="capToggle">+ Top Cap</button>
+    <button class="btn active" id="feetToggle">Building Feet</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="explodeToggle">Explode</button>
+    <button class="btn" id="resetToggle">Reset</button>
+  </div>
+</div>
+
+<div id="cameraBtns" class="panel">
+  <div class="panel-title">Camera</div>
+  <div class="btn-row">
+    <button class="btn active" data-view="iso">Iso</button>
+    <button class="btn" data-view="top">Top</button>
+    <button class="btn" data-view="front">Front</button>
+    <button class="btn" data-view="side">Side</button>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============ Configuration ============
+const STRUCTURE_W = 52;        // back wall length, X axis
+const STRUCTURE_D = 32;        // bin depth, Z axis (Z=0 back, Z=32 front/open)
+const COURSE_H = 2;            // each course is 2 ft tall
+const NUM_COURSES = 4;         // 8 ft tall
+const CAP_H = 10/12;           // 10 inch top cap
+const WALL_T = 2;              // wall thickness
+const CW_X = 26;               // center wall X position (centered on 52)
+const EXPLODE_GAP = 3;         // additional Y gap per course when exploded
+
+// Colors per block length — light, pastel-ish tones so seams read clearly
+const COLORS = {
+  6: 0x7ba7d9,  // light steel blue — most common
+  5: 0x6dd3c4,  // bright mint/teal
+  4: 0xfbbf6c,  // warm amber
+  3: 0xc4a8f2,  // lavender
+  2: 0xf48a8a,  // soft coral red
+  cap: 0xc8d0d9 // very light slate
+};
+
+const COLOR_NAMES = {
+  6: "6-foot",
+  5: "5-foot",
+  4: "4-foot",
+  3: "3-foot",
+  2: "2-foot"
+};
+
+// Course definitions — each block is { pos, len }
+// Back wall blocks: pos = X coord of left edge, oriented along X
+// Side/center wall blocks: pos = Z coord of back edge, oriented along Z
+const COURSES = {
+  // Course B′ — tie-in course (corners closed by side walls, center wall extends through back wall)
+  bPrime: {
+    backSegments: [
+      // Left segment x=2 to x=25, [6][6][6][5] with 5 buttressing center wall
+      [
+        { pos: 2,  len: 6 },
+        { pos: 8,  len: 6 },
+        { pos: 14, len: 6 },
+        { pos: 20, len: 5 }
+      ],
+      // Right segment x=27 to x=50, [5][6][6][6] with 5 buttressing center wall
+      [
+        { pos: 27, len: 5 },
+        { pos: 32, len: 6 },
+        { pos: 38, len: 6 },
+        { pos: 44, len: 6 }
+      ]
+    ],
+    // Side walls extend full 32 ft from back to front, [6][6][6][6][3][5]
+    // 6-ft at back for corner tie-in + foot at z=0
+    // 5-ft at front for foot at z=32
+    leftSide: [
+      { pos: 0,  len: 6 },
+      { pos: 6,  len: 6 },
+      { pos: 12, len: 6 },
+      { pos: 18, len: 6 },
+      { pos: 24, len: 3 },
+      { pos: 27, len: 5 }
+    ],
+    rightSide: [
+      { pos: 0,  len: 6 },
+      { pos: 6,  len: 6 },
+      { pos: 12, len: 6 },
+      { pos: 18, len: 6 },
+      { pos: 24, len: 3 },
+      { pos: 27, len: 5 }
+    ],
+    // Center wall extends through back wall slot, [6][5][6][6][6][3]
+    // 6-ft at back ties into back wall (2 ft penetration)
+    center: [
+      { pos: 0,  len: 6 },
+      { pos: 6,  len: 5 },
+      { pos: 11, len: 6 },
+      { pos: 17, len: 6 },
+      { pos: 23, len: 6 },
+      { pos: 29, len: 3 }
+    ]
+  },
+  // Course A — back wall closes corners, center wall butts
+  a: {
+    // [6][6][6][6][4][6][6][6][6] — 4-ft block centered on x=26 bridges T-junction
+    back: [
+      { pos: 0,  len: 6 },
+      { pos: 6,  len: 6 },
+      { pos: 12, len: 6 },
+      { pos: 18, len: 6 },
+      { pos: 24, len: 4 },
+      { pos: 28, len: 6 },
+      { pos: 34, len: 6 },
+      { pos: 40, len: 6 },
+      { pos: 46, len: 6 }
+    ],
+    // Side walls butt at z=2 (in front of back wall), 5x6 = 30 ft
+    leftSide: [
+      { pos: 2,  len: 6 },
+      { pos: 8,  len: 6 },
+      { pos: 14, len: 6 },
+      { pos: 20, len: 6 },
+      { pos: 26, len: 6 }
+    ],
+    rightSide: [
+      { pos: 2,  len: 6 },
+      { pos: 8,  len: 6 },
+      { pos: 14, len: 6 },
+      { pos: 20, len: 6 },
+      { pos: 26, len: 6 }
+    ],
+    // Center wall butts at z=2, 5x6 = 30 ft
+    center: [
+      { pos: 2,  len: 6 },
+      { pos: 8,  len: 6 },
+      { pos: 14, len: 6 },
+      { pos: 20, len: 6 },
+      { pos: 26, len: 6 }
+    ]
+  }
+};
+
+const STACK = ['bPrime', 'a', 'bPrime', 'a'];  // bottom to top
+
+// Building foot positions
+// Corner feet inset 1.25 ft (matching the 1.25 ft inset on the X direction)
+// so they sit fully on the corner blocks. Middle foot stays at z=16.
+const FEET = [
+  { x: 1.25,  z: 1.25 }, { x: 1.25,  z: 16 }, { x: 1.25,  z: 30.75 },
+  { x: 50.75, z: 1.25 }, { x: 50.75, z: 16 }, { x: 50.75, z: 30.75 }
+];
+
+// ============ Three.js Scene ============
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xeef2f7);
+scene.fog = new THREE.Fog(0xeef2f7, 120, 380);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 800);
+const targetPoint = new THREE.Vector3(STRUCTURE_W/2, 4, STRUCTURE_D/2);
+camera.position.set(75, 55, 75);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.82));
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.65);
+dirLight.position.set(40, 80, 40);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.camera.left = -30;
+dirLight.shadow.camera.right = 90;
+dirLight.shadow.camera.top = 60;
+dirLight.shadow.camera.bottom = -20;
+dirLight.shadow.camera.near = 1;
+dirLight.shadow.camera.far = 200;
+dirLight.shadow.bias = -0.0005;
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0xb8d4f0, 0.3);
+fillLight.position.set(-30, 30, -10);
+scene.add(fillLight);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshLambertMaterial({ color: 0xdce3eb })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.02;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid (1 ft major lines = 80 divisions across 80 ft)
+const grid = new THREE.GridHelper(80, 40, 0x94a3b8, 0xc4cdd6);
+grid.position.set(STRUCTURE_W/2, 0, STRUCTURE_D/2);
+grid.material.opacity = 0.65;
+grid.material.transparent = true;
+scene.add(grid);
+
+// Footprint outline on ground
+const footprintGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(STRUCTURE_W, 0.02, STRUCTURE_D));
+const footprint = new THREE.LineSegments(
+  footprintGeo,
+  new THREE.LineBasicMaterial({ color: 0x475569 })
+);
+footprint.position.set(STRUCTURE_W/2, 0, STRUCTURE_D/2);
+scene.add(footprint);
+
+// Center wall axis indicator on ground (subtle)
+const cwAxisGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(CW_X, 0.01, 0),
+  new THREE.Vector3(CW_X, 0.01, STRUCTURE_D)
+]);
+const cwAxis = new THREE.Line(
+  cwAxisGeo,
+  new THREE.LineDashedMaterial({ color: 0x64748b, dashSize: 0.5, gapSize: 0.5 })
+);
+cwAxis.computeLineDistances();
+scene.add(cwAxis);
+
+// OrbitControls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(targetPoint);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 8;
+controls.maxDistance = 250;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.update();
+
+// ============ Block Building ============
+const allBlocks = [];
+
+function createBlockMesh(lenX, lenY, lenZ, color, meta) {
+  const geo = new THREE.BoxGeometry(lenX, lenY, lenZ);
+  const mat = new THREE.MeshLambertMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData = meta;
+
+  const edges = new THREE.EdgesGeometry(geo);
+  const lineSegs = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({ color: 0x1a202c, transparent: true, opacity: 0.85 })
+  );
+  mesh.add(lineSegs);
+
+  allBlocks.push(mesh);
+  return mesh;
+}
+
+function buildCourse(courseType, baseY, isCap = false) {
+  const group = new THREE.Group();
+  const data = COURSES[courseType];
+  const blockHeight = isCap ? CAP_H : COURSE_H;
+  const yCenter = baseY + blockHeight / 2;
+
+  // Back wall blocks (oriented along X)
+  const backBlocks = [];
+  if (data.back) backBlocks.push(...data.back);
+  if (data.backSegments) data.backSegments.forEach(seg => backBlocks.push(...seg));
+
+  backBlocks.forEach(b => {
+    const color = isCap ? COLORS.cap : COLORS[b.len];
+    const block = createBlockMesh(b.len, blockHeight, WALL_T, color, {
+      length: b.len, wall: 'back', isCap, course: courseType
+    });
+    block.position.set(b.pos + b.len / 2, yCenter, 1);
+    group.add(block);
+  });
+
+  // Side and center walls (oriented along Z)
+  const wallPositions = [
+    { key: 'leftSide',  x: 1,                wallName: 'left side' },
+    { key: 'rightSide', x: STRUCTURE_W - 1,  wallName: 'right side' },
+    { key: 'center',    x: CW_X,             wallName: 'center' }
+  ];
+
+  wallPositions.forEach(({ key, x, wallName }) => {
+    if (!data[key]) return;
+    data[key].forEach(b => {
+      const color = isCap ? COLORS.cap : COLORS[b.len];
+      const block = createBlockMesh(WALL_T, blockHeight, b.len, color, {
+        length: b.len, wall: wallName, isCap, course: courseType
+      });
+      block.position.set(x, yCenter, b.pos + b.len / 2);
+      group.add(block);
+    });
+  });
+
+  return group;
+}
+
+const courseGroups = [];
+for (let i = 0; i < NUM_COURSES; i++) {
+  const group = buildCourse(STACK[i], i * COURSE_H);
+  scene.add(group);
+  courseGroups.push(group);
+}
+
+// Top cap (initially hidden)
+const capGroup = buildCourse('a', NUM_COURSES * COURSE_H, true);
+capGroup.visible = false;
+scene.add(capGroup);
+
+// ============ Building Foot Markers ============
+const footGroup = new THREE.Group();
+const footMeshes = [];
+
+FEET.forEach(foot => {
+  const cyl = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.75, 1.4, 24),
+    new THREE.MeshLambertMaterial({
+      color: 0xfbd38d,
+      emissive: 0x553322,
+      emissiveIntensity: 0.45
+    })
+  );
+  cyl.castShadow = true;
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.75, 1.05, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xfbd38d,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.DoubleSide
+    })
+  );
+  ring.rotation.x = -Math.PI / 2;
+
+  footGroup.add(cyl);
+  footGroup.add(ring);
+  footMeshes.push({ cyl, ring, x: foot.x, z: foot.z });
+});
+scene.add(footGroup);
+
+// ============ Block Counts ============
+function countBlocks(includeCap) {
+  const counts = { 6: 0, 5: 0, 4: 0, 3: 0, 2: 0 };
+  const capCounts = { 6: 0, 5: 0, 4: 0, 3: 0, 2: 0 };
+
+  for (let i = 0; i < NUM_COURSES; i++) {
+    const data = COURSES[STACK[i]];
+    const all = [];
+    if (data.back) all.push(...data.back);
+    if (data.backSegments) data.backSegments.forEach(s => all.push(...s));
+    if (data.leftSide) all.push(...data.leftSide);
+    if (data.rightSide) all.push(...data.rightSide);
+    if (data.center) all.push(...data.center);
+    all.forEach(b => counts[b.len]++);
+  }
+
+  if (includeCap) {
+    const data = COURSES.a;
+    [...data.back, ...data.leftSide, ...data.rightSide, ...data.center]
+      .forEach(b => capCounts[b.len]++);
+  }
+
+  return { counts, capCounts };
+}
+
+function updateLegend(includeCap) {
+  const { counts, capCounts } = countBlocks(includeCap);
+  const sizes = [6, 5, 4, 3, 2];
+  let html = '';
+  let total = 0;
+
+  sizes.forEach(size => {
+    const blockCount = counts[size];
+    const capCount = includeCap ? capCounts[size] : 0;
+    const sizeTotal = blockCount + capCount;
+    if (sizeTotal === 0) return;
+    total += sizeTotal;
+
+    const colorHex = '#' + COLORS[size].toString(16).padStart(6, '0');
+    let detail = '';
+    if (includeCap && capCount > 0) {
+      detail = `<span class="legend-detail">${blockCount}+${capCount}</span>`;
+    }
+
+    html += `
+      <div class="legend-row">
+        <div class="legend-color" style="background:${colorHex}"></div>
+        <div class="legend-label">${COLOR_NAMES[size]}</div>
+        <div class="legend-count">${sizeTotal}${detail}</div>
+      </div>
+    `;
+  });
+
+  html += `
+    <div class="legend-total">
+      <span class="label">Total blocks</span>
+      <span class="count">${total}</span>
+    </div>
+  `;
+
+  document.getElementById('legendBody').innerHTML = html;
+  document.getElementById('capStatus').textContent = includeCap ? '+ caps' : '';
+}
+
+updateLegend(false);
+
+// ============ State Management ============
+const state = {
+  capVisible: false,
+  feetVisible: true,
+  exploded: false,
+  courseVisible: [true, true, true, true]
+};
+
+function updateLayout() {
+  // Course explode offsets
+  for (let i = 0; i < courseGroups.length; i++) {
+    courseGroups[i].position.y = state.exploded ? i * EXPLODE_GAP : 0;
+  }
+  capGroup.position.y = state.exploded ? courseGroups.length * EXPLODE_GAP : 0;
+
+  // Foot positions (sit on top of cap if visible, else top course)
+  let topY;
+  if (state.capVisible) {
+    topY = capGroup.position.y + NUM_COURSES * COURSE_H + CAP_H;
+  } else {
+    topY = courseGroups[NUM_COURSES - 1].position.y + NUM_COURSES * COURSE_H;
+  }
+
+  footMeshes.forEach(({ cyl, ring, x, z }) => {
+    cyl.position.set(x, topY + 0.7, z);
+    ring.position.set(x, topY + 0.015, z);
+  });
+}
+
+updateLayout();
+
+// ============ Event Handlers ============
+document.getElementById('capToggle').addEventListener('click', e => {
+  state.capVisible = !state.capVisible;
+  capGroup.visible = state.capVisible;
+  e.currentTarget.classList.toggle('active', state.capVisible);
+  e.currentTarget.textContent = state.capVisible ? '✓ Top Cap' : '+ Top Cap';
+  updateLegend(state.capVisible);
+  document.getElementById('dimsLabel').textContent = state.capVisible
+    ? `52' W × 32' D × 8'10" H`
+    : `52' W × 32' D × 8' H`;
+  updateLayout();
+});
+
+document.getElementById('feetToggle').addEventListener('click', e => {
+  state.feetVisible = !state.feetVisible;
+  footGroup.visible = state.feetVisible;
+  e.currentTarget.classList.toggle('active', state.feetVisible);
+});
+
+document.getElementById('explodeToggle').addEventListener('click', e => {
+  state.exploded = !state.exploded;
+  e.currentTarget.classList.toggle('active', state.exploded);
+  updateLayout();
+});
+
+document.getElementById('resetToggle').addEventListener('click', () => {
+  state.exploded = false;
+  document.getElementById('explodeToggle').classList.remove('active');
+
+  for (let i = 0; i < courseGroups.length; i++) {
+    state.courseVisible[i] = true;
+    courseGroups[i].visible = true;
+  }
+  document.querySelectorAll('#courseToggles .btn').forEach(b => b.classList.add('active'));
+
+  state.feetVisible = true;
+  footGroup.visible = true;
+  document.getElementById('feetToggle').classList.add('active');
+
+  // Animate camera back to iso
+  animateCamera(presets.iso);
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-view="iso"]').classList.add('active');
+
+  updateLayout();
+});
+
+document.querySelectorAll('#courseToggles .btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    const idx = parseInt(e.currentTarget.dataset.course);
+    state.courseVisible[idx] = !state.courseVisible[idx];
+    courseGroups[idx].visible = state.courseVisible[idx];
+    e.currentTarget.classList.toggle('active', state.courseVisible[idx]);
+  });
+});
+
+// ============ Camera Presets ============
+const presets = {
+  iso: {
+    pos: new THREE.Vector3(75, 55, 75),
+    target: new THREE.Vector3(STRUCTURE_W/2, 4, STRUCTURE_D/2)
+  },
+  top: {
+    pos: new THREE.Vector3(STRUCTURE_W/2, 90, STRUCTURE_D/2 + 0.001),
+    target: new THREE.Vector3(STRUCTURE_W/2, 0, STRUCTURE_D/2)
+  },
+  front: {
+    pos: new THREE.Vector3(STRUCTURE_W/2, 12, 95),
+    target: new THREE.Vector3(STRUCTURE_W/2, 4, STRUCTURE_D/2)
+  },
+  side: {
+    pos: new THREE.Vector3(-55, 12, STRUCTURE_D/2),
+    target: new THREE.Vector3(STRUCTURE_W/2, 4, STRUCTURE_D/2)
+  }
+};
+
+function animateCamera(preset, duration = 600) {
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const startTime = performance.now();
+
+  function step() {
+    const t = Math.min((performance.now() - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    camera.position.lerpVectors(startPos, preset.pos, eased);
+    controls.target.lerpVectors(startTarget, preset.target, eased);
+    controls.update();
+    if (t < 1) requestAnimationFrame(step);
+  }
+  step();
+}
+
+document.querySelectorAll('[data-view]').forEach(btn => {
+  btn.addEventListener('click', e => {
+    animateCamera(presets[e.currentTarget.dataset.view]);
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+  });
+});
+
+// ============ Hover Tooltip (desktop) ============
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+let isTouch = false;
+
+window.addEventListener('touchstart', () => { isTouch = true; }, { once: true });
+
+renderer.domElement.addEventListener('pointermove', e => {
+  if (isTouch) return;
+  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(pointer, camera);
+  const intersects = raycaster.intersectObjects(allBlocks, false);
+
+  if (intersects.length > 0) {
+    const obj = intersects[0].object;
+    const meta = obj.userData;
+    if (meta && meta.length) {
+      const capLabel = meta.isCap ? ' cap' : '';
+      tooltip.innerHTML = `<strong>${meta.length}-ft${capLabel}</strong> · ${meta.wall} wall · ${meta.course === 'a' ? 'Course A' : 'Course B′'}`;
+      tooltip.style.left = e.clientX + 'px';
+      tooltip.style.top = e.clientY + 'px';
+      tooltip.style.display = 'block';
+      return;
+    }
+  }
+  tooltip.style.display = 'none';
+});
+
+renderer.domElement.addEventListener('pointerleave', () => {
+  tooltip.style.display = 'none';
+});
+
+// ============ Resize ============
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 100));
+
+// ============ Animation Loop ============
+function tick() {
+  requestAnimationFrame(tick);
+  controls.update();
+  renderer.render(scene, camera);
+}
+tick();
+
+</script>
+</body>
+</html>
