@@ -17,7 +17,15 @@
   #app { position: fixed; inset: 0; }
   .panel { position: absolute; background: var(--panel); border: 1px solid var(--line);
     border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(6px); }
-  #controls { top: 12px; left: 12px; width: 270px; max-height: calc(100% - 24px); overflow: auto; }
+  #controls { top: 60px; left: 12px; width: 280px; max-height: calc(100% - 72px); overflow: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  body.menu-closed #controls { display: none; }
+  #toolbar { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; z-index: 5; }
+  #toolbar button { padding: 8px 12px; font-weight: 600; background: var(--panel); backdrop-filter: blur(6px);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25); border-radius: 8px; }
+  #toolbar button.primary { background: #c96a2b; border-color: #e08a4c; color: #fff; }
+  #toolbar button.primary:hover { background: #d97a3b; }
+  #menu-close { display: none; float: right; margin: -2px -4px 0 0; }
   #controls h1 { font-size: 14px; margin: 0 0 2px; }
   #controls h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
     margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
@@ -55,9 +63,79 @@
   button.on { background: #1565c0; border-color: #42a5f5; }
   body.measuring canvas { cursor: crosshair; }
   #m-status { color: var(--muted); font-size: 12px; margin-top: 6px; }
-  @media (max-width: 640px) {
-    #controls { width: auto; right: 12px; max-height: 45%; }
-    #hud { top: auto; bottom: 12px; left: 12px; right: auto; }
+  /* Materials list */
+  #bom { position: fixed; inset: 0; z-index: 50; background: rgba(10, 14, 18, .55); display: flex;
+    align-items: flex-start; justify-content: center; padding: 24px 16px; overflow: auto; }
+  #bom[hidden] { display: none; }
+  #bom, #bom * { box-sizing: border-box; }
+  #bom .sheet { background: #fff; color: #1a202c; width: 100%; max-width: 920px; border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.35); padding: 20px 22px 24px; font-size: 14px; line-height: 1.45; }
+  #bom h2 { margin: 0; font-size: 20px; }
+  #bom .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  #bom .close { background: #edf2f7; color: #1a202c; border: 1px solid #cbd5e0; font-size: 18px; line-height: 1;
+    padding: 6px 11px; border-radius: 8px; }
+  #bom .warn { margin: 14px 0; padding: 12px 14px; border-radius: 8px; background: #fff7e6; border: 1px solid #f0b350;
+    color: #6b3d00; }
+  #bom .warn b { display: block; font-size: 15px; margin-bottom: 4px; color: #8a4b00; }
+  #bom .opts { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 10px 0 4px; }
+  #bom .opts label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #4a5568; font-weight: 600; }
+  #bom .opts select, #bom .opts input { background: #fff; color: #1a202c; border: 1px solid #cbd5e0; border-radius: 6px;
+    padding: 6px 8px; font-size: 14px; }
+  #bom .opts input { width: 70px; }
+  #bom .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 14px 0; }
+  #bom .summary div { background: #f1f5f9; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #4a5568; }
+  #bom .summary b { display: block; font-size: 16px; color: #1a202c; font-variant-numeric: tabular-nums; }
+  #bom table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #bom th, #bom td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  #bom th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #718096; }
+  #bom td.q { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+  #bom td.n { color: #4a5568; font-size: 12px; }
+  #bom tr.sec td { background: #1f2937; color: #fff; font-weight: 700; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .05em; border: 0; }
+  #bom .foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  #bom .foot button { background: #1f2937; border-color: #1f2937; color: #fff; padding: 8px 14px; border-radius: 8px; }
+  #bom .fine { margin-top: 12px; font-size: 12px; color: #718096; }
+
+  /* Touch: bigger targets */
+  @media (pointer: coarse) {
+    button { padding: 9px 12px; min-height: 40px; }
+    select, input[type=number] { min-height: 38px; font-size: 16px; }
+    .toggles label { padding: 6px 0; margin-right: 14px; }
+    input[type=checkbox] { width: 20px; height: 20px; }
+    #hover { display: none; }
+    body.measuring #hover { display: block; }
+  }
+  /* Phone layout: controls become a bottom sheet that slides away; compass shrinks */
+  @media (max-width: 700px) {
+    body { font-size: 14px; }
+    #toolbar { top: 10px; left: 10px; right: 84px; flex-wrap: wrap; }
+    #toolbar button { padding: 9px 12px; }
+    #controls { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 60vh; border-radius: 14px 14px 0 0;
+      padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -6px 24px rgba(0,0,0,.35); }
+    #menu-close { display: inline-block; }
+    #hud { top: 10px; right: 10px; width: 64px; padding: 5px; }
+    #hud svg { width: 52px; height: 52px; }
+    #hud-heading { font-size: 10px; }
+    #hover { top: 108px; bottom: auto; right: 10px; left: 10px; min-width: 0; font-size: 13px; }
+    body:not(.menu-closed) #hover { display: none; }
+    #bom { padding: 0; }
+    #bom .sheet { border-radius: 0; min-height: 100%; padding: 16px 14px 28px; }
+    #bom table, #bom tbody, #bom tr, #bom td { display: block; width: 100%; box-sizing: border-box; }
+    #bom thead { display: none; }
+    #bom tr { border-bottom: 1px solid #e2e8f0; padding: 6px 0; }
+    #bom td { border: 0; padding: 2px 4px; }
+    #bom td.q, #bom td.u { display: inline-block; width: auto; text-align: left; }
+    #bom td.q { padding-right: 0; }
+    #bom td:first-child { font-weight: 600; }
+    #bom tr.sec { padding: 0; margin-top: 10px; }
+    #bom tr.sec td { padding: 7px 8px; }
+  }
+  @media print {
+    body > *:not(#bom) { display: none !important; }
+    html, body { overflow: visible; height: auto; background: #fff; }
+    #bom { position: static; background: none; padding: 0; overflow: visible; }
+    #bom .sheet { box-shadow: none; max-width: none; }
+    #bom .close, #bom .foot, #bom .opts select { display: none; }
   }
 </style>
 <script type="importmap">
@@ -70,25 +148,35 @@
 <body>
 <div id="app"></div>
 
+<div id="toolbar">
+  <button id="menu-btn" aria-controls="controls">☰ Controls</button>
+  <button id="bom-btn" class="primary">📋 Materials list (approx.)</button>
+</div>
+
 <div id="controls" class="panel">
+  <button id="menu-close" aria-label="Close controls">✕</button>
   <h1>Aroostacast Batch Plant</h1>
   <p class="sub">Presque Isle, ME · 1 unit = 1 ft</p>
 
-  <h2>Orientation</h2>
-  <div class="row"><label for="o-bearing">Compass reading (°)</label><input id="o-bearing" type="number" step="0.5"></div>
-  <div class="row"><label for="o-ref">Reading is</label>
-    <select id="o-ref"><option value="magnetic">Magnetic</option><option value="true">True north</option></select></div>
-  <div class="row"><label for="o-decl">Declination (°, W = −)</label><input id="o-decl" type="number" step="0.1"></div>
-  <div class="row stack"><label for="o-method">How it was measured</label>
-    <select id="o-method">
-      <option value="leanToOut">Phone flat on lean-to (N) side, reads away from it</option>
-      <option value="alongLength">Phone aimed down the length, origin end → far end</option>
-    </select></div>
-  <div class="row stack"><label for="o-far">Facing the origin side, far end is on my</label>
-    <select id="o-far"><option value="left">Left</option><option value="right">Right</option></select></div>
-  <div class="row"><label for="o-trim">Fine trim (°)</label><input id="o-trim" type="number" step="0.5"></div>
-  <div class="readout" id="o-summary"></div>
-  <div class="btns" style="margin-top:6px"><button id="o-copy">Copy settings for file</button></div>
+  <h2>Views</h2>
+  <div class="btns">
+    <button data-view="iso">3D</button>
+    <button data-view="plan">Plan (N up)</button>
+    <button data-view="south">South side</button>
+    <button data-view="north">North side</button>
+    <button data-view="slab">Slab</button>
+    <button data-view="aggbins">Agg bins</button>
+    <button data-view="silo">Silo</button>
+    <button data-view="enclosure">Enclosure</button>
+    <button data-view="loader">Loader side</button>
+    <button data-view="mandoor">Man door</button>
+    <button data-view="east">East end</button>
+    <button data-view="wall">Walls</button>
+    <button data-view="ramp">Ramp (SE)</button>
+    <button data-view="bins">Bins</button>
+    <button data-view="site">Whole site</button>
+  </div>
+
 
   <h2>Show</h2>
   <div class="toggles">
@@ -124,24 +212,22 @@
   </div>
   <div id="m-status"></div>
 
-  <h2>Views</h2>
-  <div class="btns">
-    <button data-view="iso">3D</button>
-    <button data-view="plan">Plan (N up)</button>
-    <button data-view="south">South side</button>
-    <button data-view="north">North side</button>
-    <button data-view="slab">Slab</button>
-    <button data-view="aggbins">Agg bins</button>
-    <button data-view="silo">Silo</button>
-    <button data-view="enclosure">Enclosure</button>
-    <button data-view="loader">Loader side</button>
-    <button data-view="mandoor">Man door</button>
-    <button data-view="east">East end</button>
-    <button data-view="wall">Walls</button>
-    <button data-view="ramp">Ramp (SE)</button>
-    <button data-view="bins">Bins</button>
-    <button data-view="site">Whole site</button>
-  </div>
+
+  <h2>Orientation</h2>
+  <div class="row"><label for="o-bearing">Compass reading (°)</label><input id="o-bearing" type="number" step="0.5"></div>
+  <div class="row"><label for="o-ref">Reading is</label>
+    <select id="o-ref"><option value="magnetic">Magnetic</option><option value="true">True north</option></select></div>
+  <div class="row"><label for="o-decl">Declination (°, W = −)</label><input id="o-decl" type="number" step="0.1"></div>
+  <div class="row stack"><label for="o-method">How it was measured</label>
+    <select id="o-method">
+      <option value="leanToOut">Phone flat on lean-to (N) side, reads away from it</option>
+      <option value="alongLength">Phone aimed down the length, origin end → far end</option>
+    </select></div>
+  <div class="row stack"><label for="o-far">Facing the origin side, far end is on my</label>
+    <select id="o-far"><option value="left">Left</option><option value="right">Right</option></select></div>
+  <div class="row"><label for="o-trim">Fine trim (°)</label><input id="o-trim" type="number" step="0.5"></div>
+  <div class="readout" id="o-summary"></div>
+  <div class="btns" style="margin-top:6px"><button id="o-copy">Copy settings for file</button></div>
 </div>
 
 <div id="hud" class="panel">
@@ -157,6 +243,38 @@
 </div>
 
 <div id="hover" class="panel"><div class="sub">Hover the ground for coordinates</div></div>
+
+<div id="bom" hidden role="dialog" aria-modal="true" aria-labelledby="bom-title">
+  <div class="sheet">
+    <div class="head">
+      <div><h2 id="bom-title">Winter Enclosure — Approximate Materials List</h2>
+        <div class="sub" style="color:#4a5568">Aroostacast batch plant, Presque Isle ME · taken off the 3D model</div></div>
+      <button class="close" id="bom-close" aria-label="Close">✕</button>
+    </div>
+    <div class="warn"><b>⚠ Approximate quantities only — not for ordering</b>
+      Quantities are measured off the 3D model, which is built from field tape measurements plus several assumed
+      dimensions. Final field measurements must be taken before anything is ordered. Steel sizes, trusses, footings,
+      connections and snow loads must be designed by a licensed engineer, and the building may need a permit.
+      Add waste allowances and confirm every item with your suppliers.</div>
+    <div class="opts">
+      <label>Insulation <select id="bom-insul">
+        <option value="blanket">Metal + R-19 vinyl-faced blanket</option>
+        <option value="imp">3" insulated metal panels (R-21)</option>
+        <option value="single">Single-skin metal (no insulation)</option>
+      </select></label>
+      <label>Inside temp (°F) <input id="bom-tin" type="number" value="40" step="5"></label>
+      <label>Design low (°F) <input id="bom-tout" type="number" value="-20" step="5"></label>
+    </div>
+    <div class="summary" id="bom-summary"></div>
+    <table><thead><tr><th>Item</th><th style="text-align:right">Qty</th><th>Unit</th><th>Notes</th></tr></thead>
+      <tbody id="bom-body"></tbody></table>
+    <div class="foot">
+      <button id="bom-csv">Download CSV</button>
+      <button id="bom-print">Print / save PDF</button>
+    </div>
+    <p class="fine" id="bom-fine"></p>
+  </div>
+</div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -425,9 +543,9 @@ const PLANT = [
   //              (just past the 10' slab's edge: needs its own footings).
   //  Girders along both lines from the silo's south legs to the south posts carry
   //  mono-slope trusses, 4' higher on the loader (west) side so snow sheds east.
-  //  The roof steps up 2' at the north posts for door headroom: north of them it stays
-  //  at the silo frame height; a 2' stub on each north post (and 2' taller south
-  //  posts) carries the roof over the bin row. A 2' band of siding closes the step.
+  //  The roof steps up 3' at the north posts for door headroom: north of them it stays
+  //  at the silo frame height; a 3' stub on each north post (and 3' taller south
+  //  posts) carries the roof over the bin row. A 3' band of siding closes the step.
   // ---------------------------------------------------------------------------
   { kind: 'roofFrame', id: 'enclosure-frame', name: 'Proposed roof frame', layer: 'enclosure',
     leg: SILO_LEG, slabTop: LOW_GRADE, plate: ft(0, 1),
@@ -436,7 +554,7 @@ const PLANT = [
     eastX: SILO_SW[0] - SILO_CC[0],
     siloZ: SILO_SW[1],                                            // existing silo legs (tie-in)
     postZ: [AGG_BINS_NORTH - 0.75, AGG_BINS_SOUTH + 0.6],         // either end of the bin row, both lines
-    postRaise: 2,                                                 // roof step at the north posts
+    postRaise: 3,                                                 // roof step at the north posts
     beam: ft(0, 12),                                              // girder depth
     truss: { rise: 4, spacing: 4, high: 'west', chord: [ft(0, 1.5), ft(0, 5.5)] },   // 2×6 chords, 4' o.c. (assumed)
     overhang: 1,
@@ -451,7 +569,7 @@ const PLANT = [
         [EAST_LINE_START, LOW_GRADE + ft(0, 8.5) + 2 + ft(0, 8)],   // east wall cap
         [Infinity, RAMP.top]],                                   //   ramp east wall cap
       opening: [AGG_BINS_NORTH, AGG_BINS_SOUTH],
-      doorHead: RAMP.top + 16,                                   // 16' clear above the ramp (loader max 20' AGL)
+      doorHead: RAMP.top + 17,                                   // 17' clear above the ramp (loader max 20' AGL)
       bins: [AGG_BINS_NORTH, 10, ft(0, 4), 3],                   // first bin's north edge, bin, gap, count
       // East wall: top-hinged flip-up cleanout panels the full length, ~8' modules,
       // 5' tall from the slab, framed by light wall posts that run up to the roof
@@ -1304,8 +1422,11 @@ function buildRoofFrame(spec) {
   const wood = new THREE.MeshStandardMaterial({ color: '#c8a26b', roughness: 0.85 });
   const { flange: b, depth: d } = spec.leg, top = spec.top, bd = spec.beam, T = spec.truss;
   const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  // Quantities for the materials list, tallied as the model is built (see ENCLOSURE_QTY)
+  const Q = { wallArea: 0, wallSheets: [], roofArea: 0, roofSheets: [], lf: {}, count: {} };
   const member = (p, q, w, h, mat) => {   // w × h member between two points; h is "up" for level or sloped members
     const dir = q.clone().sub(p), m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dir.length()), mat);
+    if (mat.userData.tally) Q.lf[mat.userData.tally] = (Q.lf[mat.userData.tally] ?? 0) + dir.length();
     m.position.copy(p).add(q).multiplyScalar(0.5);
     m.lookAt(q);   // +z (the member's length) toward q
     g.add(m); return m;
@@ -1382,6 +1503,12 @@ function buildRoofFrame(spec) {
     const len = Math.hypot(dx, dz);
     if (len < 0.05) return;
     const P = t => [A[0] + dx * t / len, A[1] + dz * t / len];
+    const hAt = t => Math.max(0, topAt(...P(t)) - bot(...P(t)));
+    for (let s0 = 0; s0 < len - 0.05; s0 += 3) {   // 36"-coverage sheets, each cut to its tall edge
+      const w = Math.min(3, len - s0);
+      Q.wallSheets.push(Math.max(hAt(s0), hAt(s0 + w)));
+      Q.wallArea += w * hAt(s0 + w / 2);
+    }
     const geo = corrugatedGeometry(len, t => Math.max(0.05, topAt(...P(t)) - bot(...P(t))), ribs);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) pos.setY(i, pos.getY(i) + bot(...P(pos.getX(i))));
@@ -1408,6 +1535,7 @@ function buildRoofFrame(spec) {
   sheet([xEast, d0], [xEast, d1], yDoorHead, roofAt, [-out, 0]);
   const xPost = spec.eastX - out * (b / 2 - wp / 2);   // wall posts in line with the outer flange of the main posts
   const galv = new THREE.MeshStandardMaterial({ color: '#a4abb0', roughness: 0.45, metalness: 0.6 });   // galvanized light framing
+  galv.userData.tally = 'hss';
   for (let k = 0; k <= nMod; k++) {   // wall posts at the module joints, slab to roof
     const z = k === 0 ? zN + d / 2 + wp / 2 : k === nMod ? zS + d / 2 - wp / 2 : zNorth + k * modW;   // end posts tuck inside the end walls
     member(V3(xPost, spec.slabTop, z), V3(xPost, roofUnder(xPost, z) - 0.3, z), wp, wp, galv);
@@ -1442,6 +1570,7 @@ function buildRoofFrame(spec) {
     for (const [x, z] of [[xEast, zNorth], [xEast, zSouth], [xWest, zNorth], [xWest, zSouth]]) {
       const yb = x === xWest && z === zSouth ? RAMP.top : x === xWest ? spec.slabTop : spec.slabTop;
       const yt = roofUnder(x, z) + 0.1, m = new THREE.Mesh(new THREE.BoxGeometry(0.45, yt - yb, 0.45), trimMat);
+      Q.lf.corner = (Q.lf.corner ?? 0) + (yt - yb);
       m.position.set(x, (yt + yb) / 2, z); clad.add(m);
     }
   }
@@ -1523,7 +1652,12 @@ function buildRoofFrame(spec) {
     const up = V3(xB - xA, yTop(xB, zN) - yTop(xA, zN), 0).normalize();   // up the slope (low → high)
     let X = V3(0, 0, 1), origin = V3(xA, yTop(xA, zN) + lift + 0.3, z0);
     if (X.clone().cross(up).y < 0) { X = V3(0, 0, -1); origin.z = z1; }
-    const geo = corrugatedGeometry(z1 - z0, Math.hypot(xB - xA, yTop(xB, zN) - yTop(xA, zN)), ribs);
+    const slopeLen = Math.hypot(xB - xA, yTop(xB, zN) - yTop(xA, zN));
+    for (let k = 0; k < Math.ceil((z1 - z0) / 3); k++) Q.roofSheets.push(slopeLen);
+    Q.roofArea += (z1 - z0) * slopeLen;
+    Q.lf.eave = (Q.lf.eave ?? 0) + 2 * (z1 - z0);
+    Q.lf.rake = (Q.lf.rake ?? 0) + 2 * slopeLen;
+    const geo = corrugatedGeometry(z1 - z0, slopeLen, ribs);
     geo.applyMatrix4(new THREE.Matrix4().makeBasis(X, up, X.clone().cross(up)).setPosition(origin));
     const roof = new THREE.Mesh(geo, roofSteel);
     roof.castShadow = roof.receiveShadow = true;
@@ -1562,12 +1696,34 @@ function buildRoofFrame(spec) {
     doors.forEach((door, i) => { door.position.z = cfg === 'closed' ? centres[i] : cfg === 'all' ? parked : centres[+cfg]; });
   };
   layers.cladding.add(clad);
+
+  // Everything the materials list needs that isn't tallied above
+  const eastPanels = nMod - 1, southW = Math.abs(xWest - xEast), nSouth = Math.max(1, Math.ceil(southW / PN.module));
+  const tN = C.opening[0] - doorW - 1, tS = C.opening[1] + doorW / 2 - 4 / 12;
+  const lowerGirder = zP - zN, upperGirder = zS - (zP - d / 2);
+  const interiorLen = zSouth - zNorth, interiorW = Math.abs(xWest - xEast);
+  const avgH = roofUnder((xWest + xEast) / 2, (zNorth + zSouth) / 2) - spec.slabTop;
+  Object.assign(ENCLOSURE_QTY, {
+    ...Q,
+    posts: { count: 4, length: colH + spec.plate },
+    girders: [lowerGirder, lowerGirder, upperGirder, upperGirder],
+    trusses: { count: stations.length, span, rise: T.rise, highOverhang: o, lowOverhang: spec.lowOverhang ?? o, spacing: T.spacing },
+    roofLengths: [zP - (zN - o), zEnd - (zP - 0.5)], slopeLen: Math.hypot(xB - xA, yTop(xB, zN) - yTop(xA, zN)),
+    stepFlash: Math.abs(xB - xA), stepH: raise,
+    loaderDoors: { count: nBins, w: doorW, h: doorH, track: tS - tN, opening: C.opening[1] - C.opening[0], openingH: C.doorHead - RAMP.top },
+    cleanout: { east: eastPanels, eastW: modW, south: nSouth, southW: southW / nSouth, h: PN.height },
+    manDoor: { w: PD.width, h: PD.height },
+    perimeterBase: 2 * interiorLen + 2 * interiorW,
+    volume: interiorLen * interiorW * avgH, footprint: interiorLen * interiorW, interiorLen, interiorW, avgH,
+  });
+
   const tag = label(spec.name, 'tag');
   tag.position.set((xA + xB) / 2, top + T.rise + 2, (zN + zS) / 2);
   return { group: g, tag };
 }
 
 const LOADER_DOORS = { set: () => {} };
+const ENCLOSURE_QTY = {};   // filled in by buildRoofFrame
 const EAST_PANELS = { set: () => {} };
 
 const BUILDERS = { container: buildContainer, leanTo: buildLeanTo, blockWall: buildBlockWall, ramp: buildRamp, pile: buildPile, slab: buildSlab, aggBins: buildAggBins, siloFrame: buildSiloFrame, conveyor: buildConveyor, roofFrame: buildRoofFrame };
@@ -1866,8 +2022,13 @@ function setView(name) {
   else if (name === 'bins') { pos = P(95, 30, 80); target.copy(P(18, 0, 64)); }
   else if (name === 'site') { pos = P(-58, 80, 125); target.copy(P(22, 0, 36)); }
   else { pos = P(-100, 88, 128); target.copy(P(14, 0, 18)); }   // default 3D: the whole site
+  if (name === 'plan') target.setY(0);
+  if (camera.aspect < 1.2) {   // tall/narrow screens (phones): back off so the same subject fits across
+    const k = Math.pow(1.2 / camera.aspect, 0.7);
+    pos = target.clone().add(pos.clone().sub(target).multiplyScalar(k));
+  }
   camera.position.copy(pos);
-  controls.target.copy(name === 'plan' ? target.setY(0) : target);
+  controls.target.copy(target);
   controls.update();
 }
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -1936,7 +2097,7 @@ const measure = { active: false, first: null, items: [] };
     let world = hit.point.clone(), snapped = false;
     if (snapBox.checked && hit.face && !hit.object.userData.noSnap) {
       const pos = hit.object.geometry.attributes.position, at = new THREE.Vector2(e.clientX, e.clientY);
-      let best = 14;   // px
+      let best = matchMedia('(pointer: coarse)').matches ? 28 : 14;   // px; fingers get a bigger snap radius
       for (const i of [hit.face.a, hit.face.b, hit.face.c]) {
         const v = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(hit.object.matrixWorld);
         const d = toScreen(v).distanceTo(at);
@@ -2027,6 +2188,155 @@ const measure = { active: false, first: null, items: [] };
     setStatus();
   });
   setStatus();
+}
+
+// ============================================================================
+//  Controls menu: a side panel on desktop, a bottom sheet on phones (starts closed)
+// ============================================================================
+const phone = () => matchMedia('(max-width: 700px)').matches;
+{
+  const setMenu = open => document.body.classList.toggle('menu-closed', !open);
+  setMenu(!phone());
+  document.getElementById('menu-btn').addEventListener('click', () => setMenu(document.body.classList.contains('menu-closed')));
+  document.getElementById('menu-close').addEventListener('click', () => setMenu(false));
+  // On a phone, picking a view or starting a measurement hides the sheet so the model is visible
+  document.querySelectorAll('[data-view], #m-toggle').forEach(b => b.addEventListener('click', () => { if (phone()) setMenu(false); }));
+  renderer.domElement.addEventListener('pointerdown', () => { if (phone()) setMenu(false); });
+}
+
+// ============================================================================
+//  Approximate materials list for the proposed enclosure, taken off the model
+// ============================================================================
+{
+  const Q = ENCLOSURE_QTY;
+  const INSUL = {
+    single:  { label: 'Single-skin metal (no insulation)', r: 0.8, ach: 1.5 },
+    blanket: { label: 'Metal + R-19 vinyl-faced blanket', r: 14, ach: 1.0 },   // ~R-14 effective: compressed at girts/purlins
+    imp:     { label: '3" insulated metal panels', r: 19, ach: 0.75 },          // R-21 nominal, ~R-19 with joints
+  };
+  const fi = v => fmtFtIn(v), n0 = v => Math.round(v).toLocaleString(), up = (v, k = 1) => Math.ceil(v / k) * k;
+  const sum = a => a.reduce((x, y) => x + y, 0);
+  const lens = a => {   // "12 @ 18'-4", 6 @ 21'-2"" grouped by length rounded up to the inch
+    const m = new Map();
+    for (const v of a) { const k = Math.ceil(v * 12 - 1e-6); m.set(k, (m.get(k) ?? 0) + 1); }
+    return [...m.entries()].sort((x, y) => y[0] - x[0]).map(([k, c]) => `${c} @ ${fi(k / 12)}`).join(', ');
+  };
+
+  function build(insulKey, tin, tout) {
+    const I = INSUL[insulKey], L = Q.loaderDoors, CO = Q.cleanout, rows = [];
+    const sec = t => rows.push({ sec: t });
+    const add = (item, qty, unit, note = '') => rows.push({ item, qty, unit, note });
+    const coArea = CO.east * CO.eastW * CO.h + CO.south * CO.southW * CO.h;
+    const doorArea = L.count * L.w * L.h, manArea = Q.manDoor.w * Q.manDoor.h;
+    const wallSq = Q.wallArea, roofSq = Q.roofArea;
+    const cover = insulKey === 'imp' ? 3.5 : 3;   // panel coverage width, ft
+
+    sec('Structural steel');
+    add('Columns — W12 (8" × 12¼", to match the silo legs; ~W12×50)', Q.posts.count, 'ea',
+      `${fi(Q.posts.length)} each, slab to girder seat. Base plate + 4 anchor bolts each.`);
+    add('Roof girders', Q.girders.length, 'ea',
+      `${lens(Q.girders)}. Two per side: silo legs → north posts, north → south posts. Size by engineer (est. W16–W18 for these spans at ~100 psf ground snow).`);
+    add('Girder-to-silo-leg connections', 4, 'ea', 'Silo frame takes new roof load — engineer to check legs and piers.');
+    add('Base plates', 4, 'ea', 'Size by engineer.');
+    add('Anchor bolts', 16, 'ea', '4 per column.');
+    sec('Foundations');
+    add('Column footings / frost piers', 4, 'ea', 'East pair is just off the 10\' slab; west pair against the retaining wall. Frost depth here is ~5\'+.');
+    add('Concrete for footings (est.)', 4.5, 'yd³', '4 × 24" piers ~6\' deep on 3\'×3\' pads. Engineer to size.');
+    sec('Roof framing');
+    add('Mono-slope roof trusses', Q.trusses.count, 'ea',
+      `~${fi(Q.trusses.span)} span, ${Q.trusses.rise}' rise (high on loader side), ${Q.trusses.lowOverhang}' low / ${Q.trusses.highOverhang}' high overhangs, ${Q.trusses.spacing}' o.c. Engineered for ~100 psf ground snow + drift at the roof step.`);
+    const purlinLines = Math.ceil(Q.slopeLen / 2) + 1, purlinLF = purlinLines * sum(Q.roofLengths);
+    add('Roof purlins — 2×4 on edge, ~24" o.c.', up(purlinLF * 1.1 / 16), '16\' pcs', `${purlinLines} rows × ${fi(sum(Q.roofLengths))} ≈ ${n0(purlinLF)} LF + 10%. Verify spacing with roof/truss designer.`);
+    add('Truss hold-down / hurricane ties', Q.trusses.count * 2, 'ea', '');
+    sec('Wall framing');
+    add('HSS 4×4 wall posts, panel headers, door framing', up(Q.lf.hss), 'LF', 'Light galvanized framing at the cleanout panel joints, headers and man-door frame.');
+    add('Wall girts (2×6 or cold-formed), ~36" o.c.', up(wallSq / 3 * 1.1, 10), 'LF', 'Siding attachment rows; +10%.');
+    sec(insulKey === 'imp' ? 'Insulated metal panels' : 'Roofing & siding (29 ga R-panel, 36" coverage)');
+    if (insulKey === 'imp') {
+      add('3" IMP roof panels', up(roofSq * 1.05), 'ft²', `≈ ${Math.ceil(Q.roofSheets.length * 3 / cover)} panels × ${fi(Q.slopeLen)} (42" coverage).`);
+      add('3" IMP wall panels', up(wallSq * 1.08), 'ft²', `≈ ${Math.ceil(Q.wallSheets.length * 3 / cover)} panels, cut lengths vary up to ${fi(Math.max(...Q.wallSheets))}.`);
+    } else {
+      add('Roof panels', Q.roofSheets.length, 'sheets', `${lens(Q.roofSheets)} · ≈ ${n0(roofSq)} ft²`);
+      add('Wall panels', Q.wallSheets.length, 'sheets', `${n0(sum(Q.wallSheets))} LF total, longest ${fi(Math.max(...Q.wallSheets))} · ≈ ${n0(wallSq)} ft². Order cut lengths after field measuring.`);
+    }
+    add('Eave trim', up(Q.lf.eave * 1.1), 'LF', 'Both eaves, both roof levels, +10%.');
+    add('Rake trim', up(Q.lf.rake * 1.1), 'LF', '');
+    add('Outside corner trim', up(Q.lf.corner * 1.1), 'LF', '');
+    add('Base trim', up(Q.perimeterBase * 1.1), 'LF', '');
+    add('Step flashing at the roof step', up(Q.stepFlash * 1.1), 'LF', `${fi(Q.stepH)} band where the bin roof steps up.`);
+    add('Drip flashing over cleanout panels', up((Q.interiorLen + Q.interiorW) * 1.1), 'LF', '');
+    add('Opening trim (loader opening, man door)', up((2 * L.openingH + L.opening + 2 * Q.manDoor.h + Q.manDoor.w) * 1.1), 'LF', '');
+    add('Foam closures (inside + outside)', up((2 * Q.lf.eave + Q.perimeterBase) * 1.1), 'LF', '');
+    add('Panel screws (#12 self-drilling, washered)', up((roofSq * 0.8 + wallSq * 0.6) * 1.1, 250), 'ea', 'Boxes of 250.');
+    add('Butyl tape / sealant', up((roofSq + wallSq) / 400) + 4, 'rolls/tubes', 'Laps, trim and penetrations (incline belt cut-out).');
+    sec('Doors & access');
+    add('Loader sliding doors (steel frame, panel skin)', L.count, 'ea', `${fi(L.w)} W × ${fi(L.h)} H each; one per bin, 4" laps. Clear opening ${fi(L.opening)} × ${fi(L.openingH)} above the ramp.`);
+    add('Top-hung sliding door track', up(L.count * L.track), 'LF', `${L.count} runs × ${fi(L.track)} (long enough to park all three doors north of the opening).`);
+    add('Door trolleys / hangers', L.count * 2, 'ea', '');
+    add('Door bottom guides & pulls', L.count, 'sets', '');
+    add('Flip-up cleanout panels', CO.east + CO.south, 'ea', `${CO.east} east @ ${fi(CO.eastW)} × ${fi(CO.h)}, ${CO.south} south @ ${fi(CO.southW)} × ${fi(CO.h)}. Top-hinged, fold 180° up the wall.`);
+    const coPerim = CO.east * 2 * (CO.eastW + CO.h) + CO.south * 2 * (CO.southW + CO.h);
+    add('Continuous (piano) hinge for cleanout panels', up(CO.east * CO.eastW + CO.south * CO.southW), 'LF', 'Rated for full 180° flip.');
+    add('Compression gasket (EPDM) for cleanout panels', up(coPerim * 1.1), 'LF', '');
+    add('Draw latches', 2 * (CO.east + CO.south), 'ea', '2 per panel.');
+    add('Hold-open clips / turn buttons', 2 * (CO.east + CO.south), 'ea', '2 per panel, on the siding above.');
+    add('Man door — 3070 insulated steel, frame, lever, closer', 1, 'ea', 'East wall under the incline.');
+    if (insulKey === 'blanket') {
+      sec('Insulation');
+      add('R-19 vinyl-faced metal building blanket', up((roofSq + wallSq) * 1.1), 'ft²', 'Roof + walls, +10%. Faced side in (vapor retarder). Doors/panels: insulate separately.');
+      add('Blanket support / banding', up(sum(Q.roofLengths) * 2), 'LF', '');
+    }
+
+    // Heat loss at the design low (walls, roof, doors; slab edge not included)
+    const dT = tin - tout, area = wallSq + roofSq + coArea + doorArea + manArea;
+    const cond = area / I.r * dT, infil = 0.018 * Q.volume * I.ach * dT, total = (cond + infil) * 1.25;
+    const heater = up(total, 25000), gph = total / (91500 * 0.8);
+    sec('Heat (estimate)');
+    add('Design heat loss', n0(cond + infil), 'BTU/h', `Envelope ${n0(area)} ft² at ~R-${I.r} effective, ΔT ${dT}°F, ${I.ach} air changes/hr (door gaps dominate).`);
+    add('Heater size (with 25% margin)', n0(heater), 'BTU/h', 'Propane unit heater(s). Vent per code; keep combustion air clear of the belt dust.');
+    add('Propane use at the design low', gph.toFixed(1), 'gal/h', `≈ ${(gph * 24).toFixed(0)} gal/day at ${tout}°F, 80% efficient. Much less on milder days.`);
+
+    const summary = [
+      ['Enclosed footprint', `${fi(Q.interiorLen)} × ${fi(Q.interiorW)}`],
+      ['Floor area', `${n0(Q.footprint)} ft²`],
+      ['Heated volume', `${n0(Q.volume)} ft³`],
+      ['Roof area', `${n0(roofSq)} ft²`],
+      ['Wall area (net)', `${n0(wallSq)} ft²`],
+      ['Heater (est.)', `${n0(heater)} BTU/h`],
+    ];
+    return { rows, summary, insul: I };
+  }
+
+  const el = id => document.getElementById(id);
+  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  let current;
+  function render() {
+    current = build(el('bom-insul').value, +el('bom-tin').value || 40, +el('bom-tout').value || -20);
+    el('bom-summary').innerHTML = current.summary.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join('');
+    el('bom-body').innerHTML = current.rows.map(r => r.sec
+      ? `<tr class="sec"><td colspan="4">${esc(r.sec)}</td></tr>`
+      : `<tr><td>${esc(r.item)}</td><td class="q">${esc(r.qty)}</td><td class="u">${esc(r.unit)}</td><td class="n">${esc(r.note)}</td></tr>`).join('');
+    el('bom-fine').textContent = `Generated ${new Date().toLocaleDateString()} from the model as currently drawn (${current.insul.label}). ` +
+      'Prices not included. Quantities change when the model changes; regenerate after any dimension updates.';
+  }
+  const open = () => { render(); el('bom').hidden = false; el('bom-close').focus(); };
+  const close = () => { el('bom').hidden = true; };
+  el('bom-btn').addEventListener('click', open);
+  el('bom-close').addEventListener('click', close);
+  el('bom').addEventListener('click', e => { if (e.target === el('bom')) close(); });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('bom').hidden) { e.stopPropagation(); close(); } }, true);
+  ['bom-insul', 'bom-tin', 'bom-tout'].forEach(id => el(id).addEventListener('input', render));
+  el('bom-print').addEventListener('click', () => window.print());
+  el('bom-csv').addEventListener('click', () => {
+    const q = v => `"${String(v).replace(/"/g, '""')}"`;
+    let sec = '', lines = ['"APPROXIMATE — not for ordering. Field-verify all dimensions; engineer to design structure."', 'Section,Item,Qty,Unit,Notes'];
+    for (const r of current.rows) { if (r.sec) sec = r.sec; else lines.push([sec, r.item, r.qty, r.unit, r.note].map(q).join(',')); }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+    a.download = 'batch-plant-enclosure-materials-APPROX.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
 }
 
 // ============================================================================
