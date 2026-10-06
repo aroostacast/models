@@ -1,0 +1,2057 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aroostacast Batch Plant</title>
+<style>
+  :root {
+    --panel: rgba(22, 26, 31, 0.88);
+    --text: #e8eaed;
+    --muted: #9aa3ad;
+    --accent: #f2a33a;
+    --line: rgba(255, 255, 255, 0.12);
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #c9d0d6;
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text); }
+  #app { position: fixed; inset: 0; }
+  .panel { position: absolute; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(6px); }
+  #controls { top: 12px; left: 12px; width: 270px; max-height: calc(100% - 24px); overflow: auto; }
+  #controls h1 { font-size: 14px; margin: 0 0 2px; }
+  #controls h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .sub { color: var(--muted); font-size: 12px; margin: 0; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; }
+  .row label { color: var(--muted); }
+  input[type=number], select { background: #11151a; color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; padding: 3px 5px; font: inherit; }
+  input[type=number] { width: 70px; text-align: right; }
+  select { max-width: 160px; }
+  .stack { display: block; }
+  .stack select { width: 100%; max-width: none; margin-top: 3px; }
+  .readout { background: #11151a; border-radius: 4px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+  .readout b { color: var(--accent); font-weight: 600; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { background: #2a3038; color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+    padding: 4px 9px; font: inherit; cursor: pointer; }
+  button:hover { background: #343b45; }
+  .toggles label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; color: var(--text); }
+  #hud { top: 12px; right: 12px; width: 92px; text-align: center; padding: 8px; }
+  #hud svg { width: 76px; height: 76px; display: block; margin: 0 auto; }
+  #hud-heading { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  #hover { bottom: 12px; right: 12px; font-variant-numeric: tabular-nums; min-width: 190px; }
+  .lbl { font: 600 11px -apple-system, system-ui, sans-serif; padding: 2px 6px; border-radius: 3px;
+    white-space: nowrap; pointer-events: none; }
+  .lbl.tag { background: rgba(22, 26, 31, 0.85); color: #fff; }
+  .lbl.dim { background: rgba(255, 238, 205, 0.95); color: #6b3500; border: 1px solid #d08a2c; }
+  .lbl.axis { background: transparent; color: #b3261e; font-size: 12px; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+  .lbl.compass { background: transparent; color: #1e2a36; font-size: 15px; font-weight: 800;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+  .lbl.compass.n { color: #c62828; }
+  .lbl.compass.mag { color: #5a6570; font-size: 11px; }
+  .lbl.meas { background: #1565c0; color: #fff; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .lbl.meas.live { background: #42a5f5; }
+  button.on { background: #1565c0; border-color: #42a5f5; }
+  body.measuring canvas { cursor: crosshair; }
+  #m-status { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  @media (max-width: 640px) {
+    #controls { width: auto; right: 12px; max-height: 45%; }
+    #hud { top: auto; bottom: 12px; left: 12px; right: auto; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="controls" class="panel">
+  <h1>Aroostacast Batch Plant</h1>
+  <p class="sub">Presque Isle, ME · 1 unit = 1 ft</p>
+
+  <h2>Orientation</h2>
+  <div class="row"><label for="o-bearing">Compass reading (°)</label><input id="o-bearing" type="number" step="0.5"></div>
+  <div class="row"><label for="o-ref">Reading is</label>
+    <select id="o-ref"><option value="magnetic">Magnetic</option><option value="true">True north</option></select></div>
+  <div class="row"><label for="o-decl">Declination (°, W = −)</label><input id="o-decl" type="number" step="0.1"></div>
+  <div class="row stack"><label for="o-method">How it was measured</label>
+    <select id="o-method">
+      <option value="leanToOut">Phone flat on lean-to (N) side, reads away from it</option>
+      <option value="alongLength">Phone aimed down the length, origin end → far end</option>
+    </select></div>
+  <div class="row stack"><label for="o-far">Facing the origin side, far end is on my</label>
+    <select id="o-far"><option value="left">Left</option><option value="right">Right</option></select></div>
+  <div class="row"><label for="o-trim">Fine trim (°)</label><input id="o-trim" type="number" step="0.5"></div>
+  <div class="readout" id="o-summary"></div>
+  <div class="btns" style="margin-top:6px"><button id="o-copy">Copy settings for file</button></div>
+
+  <h2>Show</h2>
+  <div class="toggles">
+    <label><input type="checkbox" data-layer="grid" checked> Grid</label>
+    <label><input type="checkbox" data-layer="compass" checked> Compass</label>
+    <label><input type="checkbox" data-layer="dims"> Dimensions</label>
+    <label><input type="checkbox" data-layer="tags"> Names</label>
+    <label><input type="checkbox" data-layer="axes"> Origin</label>
+    <label><input type="checkbox" data-layer="enclosure" checked> Enclosure</label>
+  </div>
+
+  <h2>Enclosure</h2>
+  <div class="toggles"><label><input type="checkbox" data-layer="cladding" checked> Metal cladding</label></div>
+  <div class="row stack"><label for="door-config">Loader doors</label>
+    <select id="door-config">
+      <option value="closed">All closed</option>
+      <option value="all">All three open (parked north)</option>
+      <option value="2">Sand + 3/8" open (3/4" covered)</option>
+      <option value="1">Sand + 3/4" open (3/8" covered)</option>
+      <option value="0">3/8" + 3/4" open (sand covered)</option>
+    </select></div>
+  <div class="toggles" style="margin-top:6px"><label><input type="checkbox" id="panels-open"> Cleanout panels open (east + south)</label></div>
+
+  <h2>Measure</h2>
+  <div class="btns">
+    <button id="m-toggle" title="M">Measure</button>
+    <button id="m-undo" title="Backspace">Undo</button>
+    <button id="m-clear">Clear all</button>
+  </div>
+  <div class="toggles" style="margin-top:6px">
+    <label><input type="checkbox" id="m-snap" checked> Snap to corners</label>
+    <label><input type="checkbox" id="m-level"> Level only</label>
+  </div>
+  <div id="m-status"></div>
+
+  <h2>Views</h2>
+  <div class="btns">
+    <button data-view="iso">3D</button>
+    <button data-view="plan">Plan (N up)</button>
+    <button data-view="south">South side</button>
+    <button data-view="north">North side</button>
+    <button data-view="slab">Slab</button>
+    <button data-view="aggbins">Agg bins</button>
+    <button data-view="silo">Silo</button>
+    <button data-view="enclosure">Enclosure</button>
+    <button data-view="loader">Loader side</button>
+    <button data-view="mandoor">Man door</button>
+    <button data-view="east">East end</button>
+    <button data-view="wall">Walls</button>
+    <button data-view="ramp">Ramp (SE)</button>
+    <button data-view="bins">Bins</button>
+    <button data-view="site">Whole site</button>
+  </div>
+</div>
+
+<div id="hud" class="panel">
+  <svg viewBox="-50 -50 100 100" aria-label="Compass">
+    <circle r="46" fill="#11151a" stroke="rgba(255,255,255,.25)"/>
+    <g id="rose">
+      <polygon points="0,-40 7,0 -7,0" fill="#e53935"/>
+      <polygon points="0,40 7,0 -7,0" fill="#cfd6dc"/>
+      <text x="0" y="-26" fill="#fff" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">N</text>
+    </g>
+  </svg>
+  <div id="hud-heading"></div>
+</div>
+
+<div id="hover" class="panel"><div class="sub">Hover the ground for coordinates</div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// ============================================================================
+//  SITE CONFIG: edit these as field measurements come in.
+//  Plant coordinates (all in feet):
+//    Along: from the origin corner down the container's length (+ toward the far end)
+//    Out:   perpendicular to the origin side (+ away from the containers)
+//    Up:    height above grade
+//  Origin (0,0,0) = ground-level SE corner of the bottom container: on the side
+//  opposite the lean-to, at the end toward the block wall. As currently oriented,
+//  −Along is east and +Out is south.
+// ============================================================================
+const ft = (feet, inches = 0) => feet + inches / 12;
+
+const SITE = {
+  orientation: {
+    measuredBearing: 17,       // what the phone compass read, in degrees
+    reference: 'magnetic',     // 'magnetic' | 'true' (iPhone: Settings > Compass > Use True North)
+    declination: -15.5,        // degrees, west is negative. Presque Isle is roughly 15-16° W; confirm with NOAA
+    method: 'leanToOut',       // 'leanToOut': reading points straight away from the lean-to (north) side
+                               // 'alongLength': reading points down the length, origin end → far end
+    farEnd: 'left',            // standing on the origin side facing the containers, far end is on your 'left' | 'right'
+    trim: 0,                   // extra rotation in degrees, for fine-tuning
+  },
+};
+
+// ISO 668 standard 20' container, exterior dimensions (includes corner castings).
+const CONTAINER_20 = { L: ft(19, 10.5), W: ft(8, 0), H: ft(8, 6) };
+
+const sum = a => a.reduce((x, y) => x + y, 0);
+
+// Fill a run (whole feet) with 6' blocks, settling the remainder with 4s and 3s.
+// `lead` blocks go first, e.g. [3] to stagger a course off the one below.
+function fillRun(len, lead = []) {
+  const rest = Math.round(len - sum(lead));   // inch offsets in the inputs can leave float dust
+  const tail = { 0: [], 1: [4, 3], 2: [4, 4], 3: [3], 4: [4], 5: [4, 4, 3] }[rest % 6];   // 1, 2, 5 borrow a 6
+  return [...lead, ...Array((rest - sum(tail)) / 6).fill(6), ...tail];
+}
+// Courses for a wall where the layout doesn't matter: alternate courses start with a 3'.
+const autoCourses = (len, n) => Array.from({ length: n }, (_, i) => fillRun(len, i % 2 ? [3] : []));
+
+// Loader ramp and aggregate bins (plant coords, ft). Elevations are ft above the
+// container base.
+const EAST_FACE = -ft(0, 58) - 2;          // outside (east) face of the east wall line
+const EAST_INNER = EAST_FACE + 2;          // its inside (west) face, where walls tee in
+// North wall's south face: 137" north of the containers' north face (taped). Its north
+// face is flush with the east wall's north end, so the east wall's five blocks run
+// 27'-1½" with their joints (~⅜" each), not a bare 27'.
+const NORTH_WALL_SOUTH = -(CONTAINER_20.W + ft(0, 137));
+const EAST_WALL_NORTH = NORTH_WALL_SOUTH - 2;   // north end of the (original) east wall
+const EAST_JOINT = (ft(0, 68.5) - EAST_WALL_NORTH - 27) / 4;   // real joint width between its 5 blocks
+const EAST_CAPS = [2, 2, 6, 6, 6, ft(0, 57)];                   // south → north
+// The caps run flush with both ends of the wall, so their joints open up a little more
+const EAST_CAP_JOINT = (27 + 4 * EAST_JOINT - sum(EAST_CAPS)) / (EAST_CAPS.length - 1);
+const EAST_CAP_NORTH = EAST_WALL_NORTH;                         // north end of its caps
+const EAST_SLAB_SOUTH = EAST_WALL_NORTH + ft(50, 170);           // south end of the east (bin) slab
+
+// Silo frame: four I-beam legs (8" flange × 12¼" deep, 3½" pocket), flanges facing
+// north/south, on round concrete piers. Outside to outside, taped ~1' above the feet:
+// 140" east–west, 167" north–south. The SW leg's south flange face is 35" north of
+// the east wall's north cap end, and the leg sits ~3" east of the cap's centre line.
+// Checked: lean-to front NE corner → middle of that face 167" (model 167¼"),
+// container NE corner → same point 208" (model 209").
+const SILO_LEG = { flange: ft(0, 8), depth: ft(0, 12.25), pocket: ft(0, 3.5) };
+const SILO_SW = [EAST_FACE + 1 - ft(0, 3), EAST_CAP_NORTH - ft(0, 35) - SILO_LEG.depth / 2];   // SW leg centre
+const SILO_CC = [ft(0, 140) - SILO_LEG.flange, ft(0, 167) - SILO_LEG.depth];                    // centre to centre: 11'-0" E–W, 12'-10¾" N–S
+const SILO_CENTRE = [SILO_SW[0] - SILO_CC[0] / 2, SILO_SW[1] - SILO_CC[1] / 2];
+// South wall line. It isn't quite parallel to the containers (the blocks aren't tied
+// together and the wall has drifted): its rock face is 68.5" off the containers' SE
+// corner and 73" off their SW corner (taped), so it angles away ~1.1° going west.
+const SOUTH_SKEW = ft(0, 73 - 68.5) / CONTAINER_20.L;                  // ft south per ft west
+const SOUTH_RUN = [1 / Math.hypot(1, SOUTH_SKEW), SOUTH_SKEW / Math.hypot(1, SOUTH_SKEW)];
+const SOUTH_FACE_AT = along => ft(0, 68.5) + SOUTH_SKEW * along;       // rock face's Out at an Along
+
+// Aggregate (decumulator) bin row along the east wall: the sand bin's north edge is
+// 56" south of the east wall's cap step-up, then 3 × 10' bins with 4" between.
+const AGG_BINS_NORTH = ft(0, 68.5) + ft(0, 56);
+const AGG_BINS_SOUTH = AGG_BINS_NORTH + 3 * 10 + 2 * ft(0, 4);
+// Bin wall 1's north face: 21.5" south of the 3/4" bin's south face (taped). This
+// chain governs; the ramp's taped inside width (23' + 173") is off because the south
+// wall leans and drifts (it isn't tied in).
+const BIN_WALL_1_NORTH = AGG_BINS_SOUTH + ft(0, 21.5);
+
+const RAMP = {
+  northEdge: ft(0, 68.5) + 2,              // south face of the south wall (at its east end)
+  top: ft(4, 8),                           // east side, flush with the south / ramp east wall caps
+};
+RAMP.insideWidth = BIN_WALL_1_NORTH - RAMP.northEdge;   // south wall to bin wall 1: 35'-1½"
+const BINS = {
+  spacing: 20,                             // bin walls, centre to centre
+  wallLen: 60,                             // bin walls 1 and 2, west from the east wall
+  wallLens: [60, 60, 42],                  // bin wall 3 is 18' shorter
+  courses: 4,                              // 8' of block, no caps
+};
+// Bin wall 1 shows ½ block above the ramp top and 3¼ blocks at the ramp bottom.
+// The ramp falls evenly west from the east wall to its toe at the west end of bin
+// wall 1: 5'-6" over 60', about 9%. That passes the south wall's step-down at about
+// 2'-1", just under the step cap, as in the step-down photo.
+BINS.base = RAMP.top + 1 - BINS.courses * 2;     // −2'-4"
+RAMP.bottom = BINS.base + BINS.courses * 2 - 6.5; // wall top less 3¼ blocks: −10", at the toe
+RAMP.toe = EAST_INNER + BINS.wallLen;             // Along of the toe
+RAMP.openFrom = EAST_INNER + 36;                  // west end of the south wall: north side is open beyond it
+// Grade east of the east wall (the east slab, under the aggregate bins). The bins'
+// square bottoms are 17.5" above the ramp east wall caps and 84" above this grade
+// (61" legs + 8" top beam + 15" load cells), which puts it 10½" below the container
+// base. Taped slab → container bottom: ~10", which agrees.
+const LOW_GRADE = RAMP.top + ft(0, 17.5) - ft(0, 84);
+// Low ground (at LOW_GRADE): the north slab, plus everything east of the east wall
+// line from the north wall's line south. All the slabs sit at this level.
+const LOW_ZONE = () => {
+  const nW = EAST_INNER + 28, nE = EAST_FACE - ft(0, 298), nN = EAST_WALL_NORTH - ft(0, 376), s = EAST_WALL_NORTH;
+  return [[nW, nN], [nW, s], [EAST_FACE, s], [EAST_FACE, 150], [-150, 150], [-150, s], [nE, s], [nE, nN]];
+};
+const BIN_WALL_CENTRES = [0, 1, 2].map(i => BIN_WALL_1_NORTH + 1 + i * BINS.spacing);
+const EAST_LINE_START = ft(0, 68.5);       // the east wall's south end
+// Runs past bin wall 3's south face to the next whole foot (blocks come in whole feet)
+const EAST_LINE_LEN = Math.ceil(BIN_WALL_CENTRES[2] + 1 - EAST_LINE_START - 1e-6);
+
+const PLANT = [
+  { kind: 'container', id: 'admix',  name: 'Admix container', along: 0, out: 0, up: 0,              color: '#8d9297' },
+  { kind: 'container', id: 'office', name: 'Batch office',    along: 0, out: 0, up: CONTAINER_20.H, color: '#868b91' },
+
+  // Lean-to on the north side of the bottom container: shed roof falling north,
+  // open to the container wall, sliding barn door on its north face.
+  { kind: 'leanTo', id: 'lean-to', name: 'Lean-to',
+    fromEast: ft(0, 56.5),             // its east end, in from the container's east end
+    fromWest: ft(0, 5),                // its west end, in from the container's west end
+    depth: ft(0, 137 - 47),            // walls, out from the container: 137" container → north wall less
+                                       // 47" lean-to front → north wall (same at both ends). First taped as 92".
+    heightAtContainer: 10, heightAtDrip: 9,
+    door: { width: ft(0, 97), height: ft(0, 86), slides: 'west',
+            fromEast: ft(0, 6) },      // NOT measured: placed at the east end so it can park open to the west
+    color: '#8a8f94' },
+
+  // Block walls. Blocks are 2' × 2' × length; caps are 8" tall. Each wall is laid
+  // from a start corner on its reference face:
+  //   start:   [along, out] of that corner
+  //   base:    elevation of the bottom of courses[0] (0 = container base); default 0
+  //   run:     direction the blocks are laid, e.g. [0, -1] = −Out (north)
+  //   thick:   direction the 2' thickness goes from the reference face
+  //   courses: block lengths per course, bottom → top, in laying order
+  //   caps:    8" top caps in laying order; each sits on the highest course beneath it
+  //   stone:   which face carries the cast fieldstone: 'ref' | 'back' | 'both' | 'none'
+
+  // East wall: square with the containers, west face 58" east of the origin. Called
+  // out north → south; laid here from the south end, the measured one, so the lists
+  // read south → north.
+  // It stands on a buried foundation course whose top shows 8.5" above the grade
+  // east of the wall (LOW_GRADE).
+  { kind: 'blockWall', id: 'east-wall', name: 'East wall',
+    start: [-ft(0, 58), ft(0, 68.5)], run: [0, -1], thick: [-1, 0],
+    joint: EAST_JOINT, capJoint: EAST_CAP_JOINT,
+    base: LOW_GRADE + ft(0, 8.5) - 2,
+    courses: [[6, 6, 3, 6, 6],          // foundation (mostly buried); layout assumed same as above
+              [6, 6, 3, 6, 6]],
+    caps: EAST_CAPS,
+    stone: 'back' },                   // east face, as in the photo
+
+  // North tee wall: tees west off the east wall's north end, 28' long (north faces
+  // assumed flush). A buried block course under 8" caps; 15" of it shows at the tee
+  // and 12" at the west end (measured off the north slab), so the slab rises ~3"
+  // going west; the slab isn't sloped in the model yet.
+  { kind: 'blockWall', id: 'north-tee-wall', name: 'North tee wall',
+    start: [EAST_INNER, NORTH_WALL_SOUTH], run: [1, 0], thick: [0, -1],
+    base: LOW_GRADE + ft(0, 15) - ft(0, 8) - 2,   // cap top 15" above the slab at the tee
+    courses: [fillRun(28)],
+    caps: fillRun(28, [4]),
+    stone: 'ref',                        // south face, toward the lean-to (assumed)
+    exposed: [ft(0, 15), ft(0, 12)] },   // showing above grade at the tee / west end
+
+  // Concrete slab north of the north tee wall: from the wall's west end east to
+  // 298" past the east wall's outside face, and 376" north of the wall's north face.
+  // Top level with the bin slab (all the slabs are within a hair of each other).
+  // Thickness NOT measured: 8".
+  { kind: 'slab', id: 'north-slab', name: 'Concrete slab',
+    alongRange: [EAST_FACE - ft(0, 298), EAST_INNER + 28],
+    outRange: [EAST_WALL_NORTH - ft(0, 376), EAST_WALL_NORTH],
+    top: LOW_GRADE, thickness: ft(0, 8) },
+
+  // Concrete slab against the east wall's stone face: from the wall's NE corner,
+  // 10' east and 50' + 170" south. Top taken as the grade the east wall's foundation
+  // shows 8.5" above (LOW_GRADE). Thickness NOT measured: 8".
+  { kind: 'slab', id: 'east-slab', name: 'East slab',
+    alongRange: [EAST_FACE - 10, EAST_FACE],
+    outRange: [EAST_WALL_NORTH, EAST_SLAB_SOUTH],
+    top: LOW_GRADE, thickness: ft(0, 8) },
+
+  // Batch plant aggregate (decumulator) bins: three boxes in a row north → south
+  // with 4" between them, east of the east wall where the loader dumps over it from
+  // the ramp. The square part's bottom is 17.5" above the ramp east wall caps; below
+  // it each bin tapers to a gate over the collecting belt.
+  { kind: 'aggBins', id: 'agg-bins', name: 'Aggregate bins',
+    northEdge: AGG_BINS_NORTH,                // sand bin's north edge, 56" south of the east wall's step up
+    westFace: EAST_FACE,                      // flush with the east wall's stone face (checked on site)
+    size: { ns: 10, ew: ft(0, 109), h: ft(0, 63) },
+    gap: ft(0, 4),
+    bottom: RAMP.top + ft(0, 17.5),           // square part's bottom; RAMP.top is the ramp east wall's cap top
+    ground: LOW_GRADE,                        // slab under the bins
+    // Structure, inches above that ground
+    outlet: 36, gateThick: 2.5,               // hopper outlet (bin bottom); gate hangs below it
+    belt: 30, beltWidth: 30,                  // collecting belt surface
+    mainBeam: [9, 17], mainBeamSpan: 41,      // two main beams under the belt, outside to outside
+    legs: 61, topBeam: 8, loadCell: 15,       // verticals to the top support beam; bins sit on load cells
+    gate: [2, 1.5],                           // NOT measured: gate opening (ns, ew), ft
+    names: ['Sand', '3/8"', '3/4"'],          // north → south
+    beltNorth: AGG_BINS_NORTH - 1,            // flat run ends here; the incline (agg-incline) takes over
+    beltSouth: EAST_SLAB_SOUTH - ft(0, 33) }, // back of the tail pulley (belt's south end), 33" short of the slab end
+
+  // Cement silo on its frame (see SILO_* above). The frame's I-beam legs stand on
+  // round piers; a work platform sits just under their tops with the weigh hopper
+  // through its middle; the silo's own legs stand on the frame top.
+  { kind: 'siloFrame', id: 'silo-frame', name: 'Cement silo (≈1000 bbl)',
+    swCentre: SILO_SW, cc: SILO_CC, leg: SILO_LEG,
+    slabTop: LOW_GRADE,
+    pier: { dia: ft(0, 30), height: ft(0, 33) },   // height taped; diameter NOT measured
+    legHeight: 19,                                 // frame I-beams, pier top to frame top
+    platform: { below: ft(0, 4), overhang: 0, rail: ft(0, 42), hole: 5 },     // deck 4" under the frame top, inside the legs
+    // Bracing. Trucks drive east–west under the silo, between the north and south leg
+    // pairs. The south side has a beam with its top 134" above the slab (taped: it
+    // carries the conveyor brackets).
+    //   North: two identical large X's stacked from the leg bases to the ring under the
+    //          deck, with a girt between them and none at the bottom (the lower X's
+    //          diagonals land on the legs just above the base plates).
+    //   East, west, south: one smaller X, all the same, from `ew` up to the ring. On the
+    //          east and west a girt runs along the X's bottom; on the south that girt is
+    //          1½' higher (above the belt and its load) and the X isn't attached to it.
+    girts: { ns: ft(0, 134), ew: 16, southRaise: 1.5 },   // ew: above the slab, APPROX
+    hopper: { dia: 4, above: 1, cyl: 2.5, cone: 2.5, spout: 1 },  // APPROX (photo 1): weigh hopper; its spout feeds the charging chute
+    // Silo body, extrapolated from the 700 bbl (12' × 39'-1"): ~4 ft³ per barrel of
+    // cement, so 1000 bbl ≈ 4,000 ft³ ≈ 32' of 12' cylinder over a 60° cone.
+    silo: { dia: 12, cyl: 32, cone: 9.5, roof: 1.2, legs: 10 } },   // legs: cylinder bottom above the deck, APPROX (photo 1)
+
+  // Aggregate belt incline: one belt with the flat run under the bins. It leaves the
+  // flat run just north of the sand bin and climbs into the silo frame from the south,
+  // over the south girt (top 134", on the south leg line) on 33½" L-brackets, to its
+  // head just short of the silo's centre, dumping into the square charging chute that
+  // sits dead centre under the silo with the weigh hopper. (A 58" taped along the belt
+  // to the head didn't fit a dead-centre chute and was set aside.)
+  { kind: 'conveyor', id: 'agg-incline', name: 'Aggregate belt incline',
+    x: EAST_FACE - ft(0, 109) / 2,          // belt centre line, under the bins' centres
+    start: AGG_BINS_NORTH - 1, ground: LOW_GRADE,
+    belt: ft(0, 30), width: ft(0, 30), span: ft(0, 41),   // as under the bins
+    beltAboveStringer: ft(0, 21),           // stringer bottom → belt surface, as under the bins (9" → 30")
+    girtZ: SILO_SW[1], girtTop: ft(0, 134), brackets: ft(0, 33.5),
+    headAt: SILO_CENTRE[1] + 1.25,          // head pulley centre, just south of the chute's centre
+    // Two incline supports, each a pair of posts (one under each stringer) on 6" square
+    // feet set in the slab: the first feet's centres are
+    // 67" north of the pivot (where the belt turns up); 190" from the first foot's
+    // south edge to the second foot's north edge, so 15'-4" centre to centre.
+    supports: [ft(0, 67), ft(0, 67 + 190 - 6)], foot: ft(0, 6),
+    chute: SILO_CENTRE, chuteTop: 3.5, chuteBottom: ft(0, 134 + 30), chuteOutlet: 1.5,   // bottom ~30" above the 134" girt (estimated in wind)
+    boot: 1.5 },                            // rubber boot below the chute: NOT measured
+
+  // ---------------------------------------------------------------------------
+  //  PROPOSED winter enclosure (Enclosure layer). Step 1: roof over the bins and
+  //  belt. Four posts, one each side at either end of the bin row, the silo legs'
+  //  I-beam (8" × 12¼") full height on base plates on the slab (no piers), so their
+  //  tops match the silo frame top: 33" pier + 1" plate + 19' leg = 21'-10".
+  //   West line: against the east wall's stone face (the bins are flush to it).
+  //   East line: in line with the silo's east legs, ~10" clear of the bins' east face
+  //              (just past the 10' slab's edge: needs its own footings).
+  //  Girders along both lines from the silo's south legs to the south posts carry
+  //  mono-slope trusses, 4' higher on the loader (west) side so snow sheds east.
+  //  The roof steps up 2' at the north posts for door headroom: north of them it stays
+  //  at the silo frame height; a 2' stub on each north post (and 2' taller south
+  //  posts) carries the roof over the bin row. A 2' band of siding closes the step.
+  // ---------------------------------------------------------------------------
+  { kind: 'roofFrame', id: 'enclosure-frame', name: 'Proposed roof frame', layer: 'enclosure',
+    leg: SILO_LEG, slabTop: LOW_GRADE, plate: ft(0, 1),
+    top: LOW_GRADE + ft(0, 33) + ft(0, 1) + 19,                  // = silo frame top
+    westX: EAST_FACE - SILO_LEG.flange / 2,
+    eastX: SILO_SW[0] - SILO_CC[0],
+    siloZ: SILO_SW[1],                                            // existing silo legs (tie-in)
+    postZ: [AGG_BINS_NORTH - 0.75, AGG_BINS_SOUTH + 0.6],         // either end of the bin row, both lines
+    postRaise: 2,                                                 // roof step at the north posts
+    beam: ft(0, 12),                                              // girder depth
+    truss: { rise: 4, spacing: 4, high: 'west', chord: [ft(0, 1.5), ft(0, 5.5)] },   // 2×6 chords, 4' o.c. (assumed)
+    overhang: 1,
+    lowOverhang: 3.5,                                             // east (low) eave: ~3' past the wall so roof snow lands clear of the panels
+    // Grey metal roof and siding all round. The west (loader) side sits on the
+    // retaining walls' caps, with an opening over the bin row closed by three sliding
+    // doors on their own tracks; they stack, so two bins can be open at once.
+    clad: {
+      westFace: EAST_FACE,                                       // siding line on the loader side
+      westBottoms: [                                             // [south end of stretch, bottom of siding]
+        [EAST_WALL_NORTH, LOW_GRADE],                            //   north of the east wall: slab
+        [EAST_LINE_START, LOW_GRADE + ft(0, 8.5) + 2 + ft(0, 8)],   // east wall cap
+        [Infinity, RAMP.top]],                                   //   ramp east wall cap
+      opening: [AGG_BINS_NORTH, AGG_BINS_SOUTH],
+      doorHead: RAMP.top + 16,                                   // 16' clear above the ramp (loader max 20' AGL)
+      bins: [AGG_BINS_NORTH, 10, ft(0, 4), 3],                   // first bin's north edge, bin, gap, count
+      // East wall: top-hinged flip-up cleanout panels the full length, ~8' modules,
+      // 5' tall from the slab, framed by light wall posts that run up to the roof
+      panels: { module: 8, height: 5, open: 180 },               // open: swing angle, degrees (180 = folded flat up the wall)
+      wallPost: ft(0, 4),                                        // HSS 4×4 wall posts / panel jambs
+      // Personnel door in the east wall under the incline (headroom and storage under
+      // the belt there), in place of the cleanout panel module that holds `atZ`
+      personnel: { width: 3, height: ft(7, 0), atZ: -20 },
+      // Incline belt where it passes through the north wall (for the cut-out)
+      belt: { x: EAST_FACE - ft(0, 109) / 2, z0: AGG_BINS_NORTH - 1, y0: LOW_GRADE + ft(0, 30),
+              z1: SILO_SW[1], y1: LOW_GRADE + ft(0, 134 + 33.5 + 21), depth: ft(0, 21), half: 2.4 },
+    } },
+
+  // Infill: carries the north slab's eastern part (east of the east slab) 93" south,
+  // filling the notch between the two. Level with the other slabs.
+  { kind: 'slab', id: 'infill-slab', name: 'Slab infill',
+    alongRange: [EAST_FACE - ft(0, 298), EAST_FACE - 10],
+    outRange: [EAST_WALL_NORTH, EAST_WALL_NORTH + ft(0, 93)],
+    top: LOW_GRADE, thickness: ft(0, 8) },
+
+  // South wall: rock face toward the containers, 68.5" off their SE corner and 73"
+  // off their SW corner (see SOUTH_SKEW). Tees into the west face of the east wall
+  // line (east wall + ramp east wall) and runs west. The bottom course runs one block past the upper ones
+  // (the step-down), which carries its own 6' cap. No buried foundation course.
+  // The loader ramp is on its south side.
+  { kind: 'blockWall', id: 'south-wall', name: 'South wall',
+    start: [-ft(0, 58), SOUTH_FACE_AT(-ft(0, 58))], run: SOUTH_RUN, thick: [-SOUTH_RUN[1], SOUTH_RUN[0]],
+    courses: [[6, 6, 6, 6, 6, 6], [3, 6, 6, 6, 6, 3]],
+    caps: [6, 6, 6, 6, 6, 6],          // last one is on the step-down block
+    stone: 'ref' },
+
+  // Ramp & bin east wall: continues the east wall's line south from its south end,
+  // retaining the east side of the loader ramp and backing the bins. The south wall
+  // and the bin walls tee into its west face. Same courses and cap height as the
+  // south wall, on a buried foundation course (the slab beside it is below the
+  // container base). Block layout isn't important, so it's filled with 6/4/3s.
+  { kind: 'blockWall', id: 'ramp-east-wall', name: 'Ramp & bin east wall',
+    start: [EAST_FACE, EAST_LINE_START], run: [0, 1], thick: [1, 0],
+    base: -2,
+    courses: [fillRun(EAST_LINE_LEN, [3]), ...autoCourses(EAST_LINE_LEN, 2)],   // foundation + 2
+    caps: fillRun(EAST_LINE_LEN),
+    stone: 'ref' },
+
+  // Loader ramp: earth fill between the south wall, the east wall line and bin
+  // wall 1, falling evenly west from the east wall to its toe (see RAMP / BINS).
+  { kind: 'ramp', id: 'loader-ramp', name: 'Loader ramp',
+    northEdge: RAMP.northEdge, innerEdge: EAST_INNER, length: RAMP.insideWidth + 1,   // runs under half of bin wall 1
+    top: RAMP.top, toe: RAMP.toe, bottom: RAMP.bottom, openFrom: RAMP.openFrom },
+
+  // Bin walls: tee west off the east wall line, 20' centre to centre, 8' of block.
+  // No caps on these (they hold aggregate). Rock face north, as on bin wall 1 in the step-down photo.
+  ...BIN_WALL_CENTRES.map((c, i) => ({
+    kind: 'blockWall', id: `bin-wall-${i + 1}`,
+    name: `Bin wall ${i + 1}`,
+    start: [EAST_INNER, c - 1], run: [1, 0], thick: [0, 1], base: BINS.base,
+    courses: autoCourses(BINS.wallLens[i], BINS.courses),
+    stone: 'ref' })),
+
+  // Aggregate, about half full: heaped against the east wall, toeing out west.
+  { kind: 'pile', id: 'sand', name: 'Sand', material: 'sand',
+    alongRange: [EAST_INNER, EAST_INNER + BINS.wallLen], outRange: [BIN_WALL_CENTRES[0] + 1, BIN_WALL_CENTRES[1] - 1] },
+  { kind: 'pile', id: 'stone-38', name: '3/8" stone', material: 'stone',
+    alongRange: [EAST_INNER, EAST_INNER + BINS.wallLens[2]], outRange: [BIN_WALL_CENTRES[1] + 1, BIN_WALL_CENTRES[2] - 1] },
+];
+
+// ============================================================================
+//  Helpers
+// ============================================================================
+function fmtFtIn(feet) {
+  const neg = feet < 0;
+  const quarters = Math.round(Math.abs(feet) * 48);
+  const f = Math.floor(quarters / 48);
+  const q = quarters - f * 48;
+  const whole = Math.floor(q / 4);
+  const frac = ['', '¼', '½', '¾'][q % 4];
+  return `${neg ? '−' : ''}${f}'-${whole}${frac}"`;
+}
+const norm360 = d => ((d % 360) + 360) % 360;
+const POINTS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const compassPoint = d => POINTS[Math.round(norm360(d) / 22.5) % 16];
+const fmtBearing = d => `${norm360(d).toFixed(1)}° ${compassPoint(d)}`;
+
+function label(text, cls) {
+  const el = document.createElement('div');
+  el.className = `lbl ${cls}`;
+  el.textContent = text;
+  return new CSS2DObject(el);
+}
+
+// ============================================================================
+//  Renderer / scene
+// ============================================================================
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const ANISO = renderer.capabilities.getMaxAnisotropy();   // sharp textures at grazing angles
+renderer.toneMappingExposure = 1.15;
+app.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+Object.assign(labelRenderer.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
+app.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#c9d0d6');   // overcast
+scene.fog = new THREE.Fog('#c9d0d6', 400, 1500);
+
+// Near plane at 0.5 ft (not 0.1) keeps depth precision fine enough that surfaces a
+// few hundredths of a foot apart don't flicker at site distances.
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 3000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI / 2 - 0.02;
+
+// Reflected-sky environment so walls facing away from the sun still show their ribbing
+// (a hemisphere light alone lights every vertical face identically).
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+scene.add(new THREE.HemisphereLight('#e3e9ee', '#6b6255', 0.9));
+const sun = new THREE.DirectionalLight('#ffffff', 1.8);
+sun.position.set(-60, 120, 80);   // south-west, high
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 1, far: 400 });
+sun.shadow.bias = -0.0002;
+sun.shadow.normalBias = 0.05;   // stops shadow striping on flat and gently sloped surfaces
+scene.add(sun);
+const fill = new THREE.DirectionalLight('#dfe7ef', 0.6);   // soft overcast fill from the north-east
+fill.position.set(70, 50, -90);
+scene.add(fill);
+
+// Ground: muddy gravel, subtle noise so it reads as a surface.
+function noiseTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const img = g.createImageData(256, 256);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 205 + Math.random() * 50;
+    img.data[i] = v * 1.08; img.data[i + 1] = v; img.data[i + 2] = v * 0.86; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.15, 0.15); t.anisotropy = ANISO;   // UVs are in feet: one tile per ~6.7 ft
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+// Ground loses ties with anything lying on it
+const groundMat = new THREE.MeshStandardMaterial({ color: '#6e665b', map: noiseTexture(), roughness: 1, envMapIntensity: 0.3,
+  polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
+
+// ============================================================================
+//  Plant frame: world is +X east, −Z north. `plantRot` turns the plant to its
+//  compass heading; `plant` mirrors so Along/Out read as positive numbers no
+//  matter which side the far end is on. Everything plant-related goes in `plant`.
+// ============================================================================
+// Ground (plant frame, so it turns with the orientation): LOW_GRADE over the slabs
+// and east of the east wall, the container base on the walled pad (containers,
+// ramp, bins), easing between the two everywhere else. Real terrain comes later.
+function groundShape(points) {   // [along, out] → shape (x = along, y = −out); rotateX(−90°) maps it back
+  return new THREE.Shape(points.map(([a, o]) => new THREE.Vector2(a, -o)));
+}
+function groundMesh(shape, y) {
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2), groundMat);
+  m.position.y = y;
+  m.receiveShadow = true;
+  m.userData.noSnap = true;
+  return m;
+}
+const plantRot = new THREE.Group();
+const plant = new THREE.Group();
+plantRot.add(plant);
+scene.add(plantRot);
+{
+  // Distance from a point to a polygon (0 inside)
+  const distToPoly = (px, pz, poly) => {
+    let inside = false, d = Infinity;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, zi] = poly[i], [xj, zj] = poly[j];
+      if ((zi > pz) !== (zj > pz) && px < (xj - xi) * (pz - zi) / (zj - zi) + xi) inside = !inside;
+      const dx = xj - xi, dz = zj - zi;
+      const t = Math.max(0, Math.min(1, ((px - xi) * dx + (pz - zi) * dz) / (dx * dx + dz * dz)));
+      d = Math.min(d, Math.hypot(px - xi - t * dx, pz - zi - t * dz));
+    }
+    return inside ? 0 : d;
+  };
+  const smooth = (e, x) => { const t = Math.min(1, x / e); return t * t * (3 - 2 * t); };
+  const low = LOW_ZONE();
+  const nW = EAST_INNER + 28, binsW = EAST_INNER + BINS.wallLen, south = EAST_LINE_START + EAST_LINE_LEN;
+  const pad = [[EAST_FACE, EAST_WALL_NORTH], [nW, EAST_WALL_NORTH], [nW, RAMP.northEdge - 2],
+               [binsW, RAMP.northEdge - 2], [binsW, south], [EAST_FACE, south]];
+  const height = (x, z) => {
+    const dPad = distToPoly(x, z, pad);
+    if (dPad === 0) return 0;
+    const dLow = distToPoly(x, z, low);
+    if (dLow === 0) return LOW_GRADE;
+    return LOW_GRADE * (1 - smooth(15, dLow)) * smooth(4, dPad);   // ease ~15' off the slabs, ~4' off the pad
+  };
+  const R = 260;   // height field out to here, flat container-base plane beyond
+  const field = heightMesh(-R, R, -R, R, [260, 260], height, groundMat, 1);
+  field.castShadow = false;
+  const outer = groundShape([[-1000, -1000], [1000, -1000], [1000, 1000], [-1000, 1000]]);
+  outer.holes.push(new THREE.Path(groundShape([[-R, -R], [R, -R], [R, R], [-R, R]]).getPoints()));
+  plant.add(field, groundMesh(outer, 0));
+}
+
+const layers = { grid: new THREE.Group(), dims: new THREE.Group(), tags: new THREE.Group(), axes: new THREE.Group(),
+  enclosure: new THREE.Group() };   // proposed winter enclosure
+Object.values(layers).forEach(g => plant.add(g));
+layers.cladding = new THREE.Group();
+layers.enclosure.add(layers.cladding);   // hiding the enclosure hides its cladding too
+layers.compass = new THREE.Group();
+scene.add(layers.compass);   // compass ring is world-aligned
+
+// ============================================================================
+//  Container builder (local frame: x along length, y up, z out; box spans
+//  x∈[0,L], z∈[-W,0], so the origin side is the z=0 face)
+// ============================================================================
+// `height` is a number, or a function of position along the sheet (for raked walls)
+function corrugatedGeometry(length, height, { pitch = ft(0, 11), depth = ft(0, 1.4), flatOut = ft(0, 2.8), flatIn = ft(0, 2.8) } = {}) {
+  // Trapezoidal sheet: profile runs along +x, outer face at z=0, valleys at z=-depth.
+  const slope = (pitch - flatOut - flatIn) / 2;
+  const seq = [[flatOut, 0], [slope, -depth], [flatIn, -depth], [slope, 0]];
+  const pts = [[0, 0]];
+  let x = 0, i = 0;
+  while (x < length - 1e-6) {
+    const [dx, zEnd] = seq[i % 4];
+    const zStart = pts[pts.length - 1][1];
+    const nx = Math.min(x + dx, length);
+    pts.push([nx, zStart + (zEnd - zStart) * (nx - x) / dx]);
+    x = nx; i++;
+  }
+  const pos = [];
+  for (let j = 0; j < pts.length - 1; j++) {
+    const [x0, z0] = pts[j], [x1, z1] = pts[j + 1];
+    const h0 = typeof height === 'function' ? height(x0) : height, h1 = typeof height === 'function' ? height(x1) : height;
+    pos.push(x0, 0, z0, x1, 0, z1, x1, h1, z1,  x0, 0, z0, x1, h1, z1, x0, h0, z0);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function buildContainer(spec) {
+  const { L, W, H } = CONTAINER_20;
+  const g = new THREE.Group();
+  const paint = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.65, metalness: 0.25, flatShading: true, side: THREE.DoubleSide });
+  const frame = new THREE.MeshStandardMaterial({ color: new THREE.Color(spec.color).multiplyScalar(0.8), roughness: 0.6, metalness: 0.3 });
+  const casting = new THREE.MeshStandardMaterial({ color: '#4a4d50', roughness: 0.8, metalness: 0.4 });
+  const box = (sx, sy, sz, x, y, z, mat) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+    m.position.set(x, y, z); g.add(m); return m;
+  };
+
+  const post = ft(0, 6);            // corner post section
+  const cL = ft(0, 7), cH = ft(0, 4.5), cW = ft(0, 6.5);   // ISO corner casting
+  const railB = ft(0, 6), railT = ft(0, 4), railD = ft(0, 2.5);
+  const inset = ft(0, 0.75);        // corrugation sits just inside the frame
+
+  // Corner posts and castings
+  for (const x of [0, L]) for (const z of [0, -W]) {
+    const px = x === 0 ? post / 2 : L - post / 2, pz = z === 0 ? -post / 2 + 0.01 : -W + post / 2 - 0.01;
+    box(post - 0.02, H - 2 * cH, post - 0.02, px, H / 2, pz, frame);
+    const cx = x === 0 ? cL / 2 : L - cL / 2, cz = z === 0 ? -cW / 2 : -W + cW / 2;
+    box(cL, cH, cW, cx, cH / 2, cz, casting);
+    box(cL, cH, cW, cx, H - cH / 2, cz, casting);
+  }
+  // Side rails (top + bottom, both long sides) and end rails
+  for (const z of [-railD / 2, -W + railD / 2]) {
+    box(L - 2 * cL, railB, railD, L / 2, railB / 2, z, frame);
+    box(L - 2 * cL, railT, railD, L / 2, H - railT / 2, z, frame);
+  }
+  for (const x of [railD / 2, L - railD / 2]) {
+    box(railD, railB, W - 2 * cW, x, railB / 2, -W / 2, frame);
+    box(railD, railT * 1.5, W - 2 * cW, x, H - railT * 0.75, -W / 2, frame);
+  }
+  // Corrugated walls
+  const wallH = H - railB - railT;
+  const sideLen = L - 2 * post, endLen = W - 2 * post;
+  const wall = (len, x, z, rotY) => {
+    const m = new THREE.Mesh(corrugatedGeometry(len, wallH), paint);
+    m.position.set(x, railB, z); m.rotation.y = rotY; g.add(m);
+  };
+  wall(sideLen, post, -inset, 0);                     // origin side
+  wall(sideLen, L - post, -W + inset, Math.PI);       // lean-to side
+  wall(endLen, inset, -W + post, -Math.PI / 2);       // origin end
+  wall(endLen, L - inset, -post, Math.PI / 2);        // far end
+  // Roof and floor
+  box(L - 2 * post, ft(0, 1), W - 2 * post, L / 2, H - ft(0, 1.5), -W / 2, paint);
+  box(L - 2 * post, ft(0, 1), W - 2 * post, L / 2, ft(0, 0.5), -W / 2, frame);
+
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+
+  const tag = label(spec.name, 'tag');
+  tag.position.set(L / 2, H * 0.55, 0.3);
+  return { group: g, tag, size: { L, W, H } };
+}
+
+// ============================================================================
+//  Block wall builder (runs along Out; blocks 2' × 2', caps 8" with chamfered top)
+// ============================================================================
+const BLOCK = { T: 2, H: 2, CAP_H: ft(0, 8), JOINT: ft(0, 0.25) };
+
+// Cast fieldstone face: a Voronoi pattern of rounded stones with dirty joints.
+// One tile is 4' × 2' and wraps horizontally, so it repeats cleanly along a block.
+function fieldstoneMaps() {
+  const W = 512, H = 256;
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const cols = 6, rows = 3, pts = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
+    pts.push([(((c + 0.5 + (r % 2) * 0.5 + (rnd() - 0.5) * 0.7) / cols) * W + W) % W,
+              ((r + 0.5 + (rnd() - 0.5) * 0.6) / rows) * H, rnd()]);
+  const color = new ImageData(W, H), bump = new ImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let f1 = 1e9, f2 = 1e9, shade = 0;
+    for (const [px, py, sh] of pts) {
+      let dx = Math.abs(x - px); dx = Math.min(dx, W - dx) * 0.8;   // stones a bit wider than tall
+      const d = Math.hypot(dx, y - py);
+      if (d < f1) { f2 = f1; f1 = d; shade = sh; } else if (d < f2) f2 = d;
+    }
+    const edge = Math.min(f2 - f1, y * 2, (H - 1 - y) * 2);          // distance to the nearest joint
+    const dome = Math.sqrt(Math.min(1, edge / 14));
+    const n = (Math.random() - 0.5) * 16;
+    const v = edge < 2.5 ? 78 + n : 148 + (shade - 0.5) * 36 + dome * 24 + n;
+    const i = (y * W + x) * 4;
+    color.data.set([v * 1.02, v, v * 0.95, 255], i);
+    const b = 255 * dome + n;
+    bump.data.set([b, b, b, 255], i);
+  }
+  const tex = img => {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    c.getContext('2d').putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping;
+    t.anisotropy = ANISO;
+    return t;
+  };
+  const map = tex(color); map.colorSpace = THREE.SRGBColorSpace;
+  return { map, bump: tex(bump) };
+}
+const STONE = fieldstoneMaps();
+const blockConcrete = new THREE.MeshStandardMaterial({ color: '#aaa59c', roughness: 0.92 });
+const capConcrete = new THREE.MeshStandardMaterial({ color: '#bab6ad', roughness: 0.85 });
+
+function stoneMaterial(len, offset) {
+  const map = STONE.map.clone(), bumpMap = STONE.bump.clone();
+  for (const t of [map, bumpMap]) { t.repeat.set(len / 4, 1); t.offset.set(offset, 0); t.needsUpdate = true; }
+  return new THREE.MeshStandardMaterial({ map, bumpMap, bumpScale: 3, roughness: 0.95 });
+}
+
+function capGeometry(len) {
+  const t = BLOCK.T / 2, h = BLOCK.CAP_H, c = ft(0, 1);   // 1" chamfer on the top edges
+  const V2 = (x, y) => new THREE.Vector2(x, y);
+  const shape = new THREE.Shape([V2(-t, 0), V2(t, 0), V2(t, h - c), V2(t - c, h), V2(-t + c, h), V2(-t, h - c)]);
+  return new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false });   // extrudes along +Out
+}
+
+// Length of a course or cap run, including any measured joints between pieces
+const runLength = spec => pieces => sum(pieces) + (pieces.length - 1) * (spec.joint ?? 0);
+
+function buildBlockWall(spec) {
+  const { T, H, CAP_H, JOINT } = BLOCK, joint = spec.joint ?? 0;   // `joint`: real gap between blocks, if measured
+  const [ra, ro] = spec.run, [ta, to] = spec.thick, [sa, so] = spec.start, base = spec.base ?? 0;
+  // Wall-local frame: x runs from the start corner along the wall, y is up, and the
+  // thickness goes toward local ±z (sign s) so it lands on spec.thick once rotated.
+  const wall = new THREE.Group();
+  wall.rotation.y = Math.atan2(-ro, ra);                 // local +x → run
+  wall.position.set(sa, base, so);
+  const s = Math.round(Math.sin(wall.rotation.y) * ta + Math.cos(wall.rotation.y) * to);
+  const refSlot = s > 0 ? 5 : 4, backSlot = s > 0 ? 4 : 5;   // BoxGeometry slots: 4 = +z, 5 = −z
+  const stoneSlots = { ref: [refSlot], back: [backSlot], both: [refSlot, backSlot], none: [] }[spec.stone];
+
+  let n = 0;
+  spec.courses.forEach((course, ci) => {
+    let x = 0;
+    for (const len of course) {
+      const mats = Array(6).fill(blockConcrete);
+      for (const slot of stoneSlots) mats[slot] = stoneMaterial(len, (n++ * 0.37) % 1);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len - JOINT, H, T), mats);
+      m.position.set(x + len / 2, ci * H + H / 2, s * T / 2);
+      wall.add(m);
+      x += len + joint;
+    }
+  });
+  const lens = spec.courses.map(runLength(spec));
+  let x = 0;
+  for (const len of spec.caps ?? []) {
+    const under = lens.findLastIndex(l => l >= x + len / 2);   // highest course under the cap's middle
+    const m = new THREE.Mesh(capGeometry(len - JOINT).rotateY(Math.PI / 2), capConcrete);   // extrude along +x
+    m.position.set(x + JOINT / 2, (under + 1) * H, s * T / 2);
+    wall.add(m);
+    x += len + (spec.capJoint ?? joint);
+  }
+  wall.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  if (spec.placeholder) {   // unconfirmed layout: see-through so it reads as provisional
+    const ghost = m => Object.assign(m.clone(), { transparent: true, opacity: 0.45, depthWrite: false });
+    wall.traverse(o => { if (o.isMesh) { o.material = Array.isArray(o.material) ? o.material.map(ghost) : ghost(o.material); o.castShadow = false; } });
+  }
+
+  const g = new THREE.Group();
+  g.add(wall);
+  const mid = sum(spec.courses[spec.courses.length - 1]) / 2;
+  const tag = label(spec.name, 'tag');
+  tag.position.set(sa + ra * mid + ta * T / 2, base + spec.courses.length * H + (spec.caps ? CAP_H : 0) + 1.2, so + ro * mid + to * T / 2);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Loader ramp: earth surface between four corner elevations, with a 1½:1 slope
+//  down to grade on the open west side (the other sides are against walls)
+// ============================================================================
+function speckleTexture(base, spread, size = 256, blobs = 0) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d');
+  const img = g.createImageData(size, size);
+  const [r0, g0, b0] = new THREE.Color(base).toArray().map(v => v * 255);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const k = 1 + (Math.random() - 0.5) * spread;
+    img.data.set([r0 * k, g0 * k, b0 * k, 255], i);
+  }
+  g.putImageData(img, 0, 0);
+  for (let i = 0; i < blobs; i++) {   // larger stones for coarse aggregate
+    const k = 0.65 + Math.random() * 0.7;
+    g.fillStyle = `rgb(${r0 * k},${g0 * k},${b0 * k})`;
+    g.beginPath();
+    g.ellipse(Math.random() * size, Math.random() * size, 1.5 + Math.random() * 2.5, 1.5 + Math.random() * 2, Math.random() * 3, 0, 7);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = ANISO;
+  return t;
+}
+
+// Anything resting on the (flat) ground sits this far above it so the two never tie
+const GRADE_LIFT = 0.08;
+
+// Height field → mesh, with world-scale UVs (one texture tile per `tile` ft)
+function heightMesh(x0, x1, z0, z1, seg, height, material, tile) {
+  const pos = [], uv = [], idx = [], nx = seg[0], nz = seg[1];
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+    const x = x0 + (x1 - x0) * i / nx, z = z0 + (z1 - z0) * j / nz;
+    pos.push(x, height(x, z), z);
+    uv.push(x / tile, z / tile);
+  }
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material);
+  m.castShadow = m.receiveShadow = true;
+  m.userData.noSnap = true;   // its vertices are just a grid, not real corners
+  return m;
+}
+
+const dirt = new THREE.MeshStandardMaterial({ color: '#ffffff', map: speckleTexture('#8a7358', 0.18), roughness: 1, side: THREE.DoubleSide });
+
+function buildRamp(spec) {
+  const g = new THREE.Group();
+  const { northEdge: n, length: len, innerEdge: x0, toe, top, bottom, openFrom } = spec;
+  const south = n + len;
+  // Even fall from the east wall (top) to the toe (bottom). Below grade it is held
+  // just above the ground plane, since grade isn't modeled yet.
+  const grade = (top - bottom) / (toe - x0);
+  const surface = x => Math.max(GRADE_LIFT, top - (x - x0) * grade);
+  g.add(heightMesh(x0, toe, n, south, [30, 12], surface, dirt, 8));
+  // Past the south wall's west end the north side is open: 2:1 side slope to grade
+  const run = surface(openFrom) * 2;
+  if (run > 0) g.add(heightMesh(openFrom, toe, n - run, n, [24, 6], (x, z) => Math.max(GRADE_LIFT, surface(x) - (n - z) / 2), dirt, 8));
+
+  const tag = label(`${spec.name} (${(grade * 100).toFixed(0)}% grade)`, 'tag');
+  tag.position.set((x0 + toe) / 2, surface((x0 + toe) / 2) + 1.5, n + len / 2);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Aggregate piles: heaped against the back (east) wall at about wall height,
+//  flat-topped for a while, then down at the angle of repose to a toe
+// ============================================================================
+const AGGREGATE = {
+  sand:  { map: speckleTexture('#a3927a', 0.14), peak: 4.3, plateau: 22, repose: 33 },
+  stone: { map: speckleTexture('#8e8c86', 0.35, 256, 900), peak: 4.3, plateau: 22, repose: 37 },
+};
+
+function buildPile(spec) {
+  const a = AGGREGATE[spec.material];
+  const [x0, x1] = spec.alongRange, [z0, z1] = spec.outRange, zc = (z0 + z1) / 2, half = (z1 - z0) / 2;
+  const tan = Math.tan(THREE.MathUtils.degToRad(a.repose));
+  const height = (x, z) => {
+    const u = x - x0, v = (z - zc) / half;                       // v: −1 … 1 across the bin
+    const toe = a.plateau + a.peak / tan + 1.5 * Math.cos(v * 2.1);   // ragged toe
+    const h = Math.min(a.peak + 0.5 * (1 - v * v), (toe - u) * tan)
+      + 0.15 * Math.sin(u * 0.8 + v * 3) * Math.cos(u * 0.37 - v * 2);
+    return Math.max(GRADE_LIFT, h);
+  };
+  const g = new THREE.Group();
+  g.add(heightMesh(x0 + 0.05, x1, z0 + 0.05, z1 - 0.05, [60, 18], height,
+    new THREE.MeshStandardMaterial({ map: a.map, roughness: 1 }), 4));
+  const tag = label(`${spec.name} bin`, 'tag');
+  tag.position.set(x0 + a.plateau / 2, a.peak + 2, zc);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Lean-to (local: x runs west along the container from the lean-to's east end,
+//  z = 0 is the container's north face, north is −z)
+// ============================================================================
+function buildLeanTo(spec) {
+  const { L, W } = CONTAINER_20;
+  const w = L - spec.fromWest - spec.fromEast, D = spec.depth;
+  const hC = spec.heightAtContainer, hD = spec.heightAtDrip;
+  const g = new THREE.Group();
+  g.position.set(spec.fromEast, 0, -W);
+  const siding = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.6, metalness: 0.3, flatShading: true, side: THREE.DoubleSide });
+  const trim = new THREE.MeshStandardMaterial({ color: '#5d6166', roughness: 0.6, metalness: 0.3 });
+  const ribs = { pitch: ft(0, 12), depth: ft(0, 1.1), flatOut: ft(0, 1), flatIn: ft(0, 9) };   // R-panel
+  const sheet = (len, h, x, y, z) => new THREE.Mesh(corrugatedGeometry(len, h, ribs), siding);
+  const add = (m, x, y, z, ry = 0) => { m.position.set(x, y, z); m.rotation.y = ry; g.add(m); return m; };
+
+  add(sheet(w, hD), w, 0, -D, Math.PI);                                              // north front
+  add(sheet(D, t => hD + (hC - hD) * t / D), 0, 0, -D, -Math.PI / 2);               // east side, drip → container
+  add(sheet(D, t => hC - (hC - hD) * t / D), w, 0, 0, Math.PI / 2);                 // west side, container → drip
+  // Roof: one sheet down the slope, 6" overhang at the sides and drip edge
+  const o = 0.5, pitch = Math.atan2(hC - hD, D);
+  const roof = new THREE.Mesh(corrugatedGeometry(w + 2 * o, Math.hypot(D, hC - hD) + o, ribs), siding);
+  roof.rotation.x = -Math.PI / 2 - pitch;
+  roof.position.set(-o, hC + 0.06, 0);
+  g.add(roof);
+  // Corner trim
+  for (const x of [0, w]) add(new THREE.Mesh(new THREE.BoxGeometry(0.25, hD, 0.25), trim), x, hD / 2, -D);
+
+  // Barn door, hung outside the front wall on a track that runs west to park it open
+  const d = spec.door, t = ft(0, 1.75), zDoor = -D - ft(0, 2.5), x0 = d.fromEast, y0 = ft(0, 1);
+  const doorMat = new THREE.MeshStandardMaterial({ color: '#6a5f52', roughness: 0.8 });
+  add(new THREE.Mesh(new THREE.BoxGeometry(d.width, d.height, t), doorMat), x0 + d.width / 2, y0 + d.height / 2, zDoor);
+  const zFace = zDoor - t / 2 - ft(0, 0.5), rail = ft(0, 5);
+  for (const y of [y0 + rail / 2, y0 + d.height / 2, y0 + d.height - rail / 2])
+    add(new THREE.Mesh(new THREE.BoxGeometry(d.width, rail, ft(0, 1)), doorMat), x0 + d.width / 2, y, zFace);
+  for (const x of [x0 + rail / 2, x0 + d.width - rail / 2])
+    add(new THREE.Mesh(new THREE.BoxGeometry(rail, d.height, ft(0, 1)), doorMat), x, y0 + d.height / 2, zFace);
+  for (const [ya, yb] of [[y0 + rail, y0 + d.height / 2], [y0 + d.height / 2, y0 + d.height - rail]]) {   // Z braces
+    const dx = d.width - 2 * rail, dy = yb - ya;
+    const brace = add(new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(dx, dy), rail, ft(0, 1)), doorMat), x0 + d.width / 2, (ya + yb) / 2, zFace);
+    brace.rotation.z = Math.atan2(dy, dx) * (d.slides === 'west' ? 1 : -1);
+  }
+  const trackLen = 2 * d.width;
+  add(new THREE.Mesh(new THREE.BoxGeometry(trackLen, ft(0, 3), ft(0, 2)), trim), x0 + trackLen / 2, y0 + d.height + ft(0, 3), zDoor);
+
+  g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const tag = label(spec.name, 'tag');
+  tag.position.set(spec.fromEast + w / 2, hD + 1.5, -W - D / 2);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Concrete slab
+// ============================================================================
+const slabConcrete = new THREE.MeshStandardMaterial({ color: '#ffffff', map: speckleTexture('#a7a69f', 0.06), roughness: 0.85 });
+slabConcrete.map.repeat.set(1, 1);
+
+function buildSlab(spec) {
+  const [x0, x1] = spec.alongRange, [z0, z1] = spec.outRange, top = spec.top + GRADE_LIFT / 2;
+  const geo = new THREE.BoxGeometry(x1 - x0, spec.thickness, z1 - z0);
+  const uv = geo.attributes.uv;   // ~8 ft texture tiles instead of one stretched tile
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0) / 8, uv.getY(i) * (z1 - z0) / 8);
+  const m = new THREE.Mesh(geo, slabConcrete);
+  m.position.set((x0 + x1) / 2, top - spec.thickness / 2, (z0 + z1) / 2);
+  m.receiveShadow = true;
+  const g = new THREE.Group();
+  g.add(m);
+  const tag = label(spec.top < 0 ? `${spec.name} (top ${fmtFtIn(spec.top)})` : spec.name, 'tag');
+  tag.position.set((x0 + x1) / 2, top + 1, (z0 + z1) / 2);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Aggregate (decumulator) bins: square boxes over hopper tapers, on a steel frame
+// ============================================================================
+// Open hopper: top w × d at y = 0 down to a gate gw × gd at y = −h (x = ew, z = ns)
+function hopperGeometry(w, d, gw, gd, h) {
+  const t = [[-w / 2, 0, -d / 2], [w / 2, 0, -d / 2], [w / 2, 0, d / 2], [-w / 2, 0, d / 2]];
+  const b = [[-gw / 2, -h, -gd / 2], [gw / 2, -h, -gd / 2], [gw / 2, -h, gd / 2], [-gw / 2, -h, gd / 2]];
+  const pos = [];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    pos.push(...t[i], ...t[j], ...b[j], ...t[i], ...b[j], ...b[i]);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function buildAggBins(spec) {
+  const g = new THREE.Group(), tags = new THREE.Group();
+  const { ns, ew, h } = spec.size, y0 = spec.bottom, xc = spec.westFace - ew / 2;
+  const sheet = new THREE.MeshStandardMaterial({ color: '#c3c8cc', roughness: 0.55, metalness: 0.35, side: THREE.DoubleSide });
+  const band = new THREE.MeshStandardMaterial({ color: '#a9aeb3', roughness: 0.5, metalness: 0.4 });
+  const steel = new THREE.MeshStandardMaterial({ color: '#59606a', roughness: 0.6, metalness: 0.5 });
+  const cell = new THREE.MeshStandardMaterial({ color: '#c9a227', roughness: 0.5, metalness: 0.4 });
+  const inch = v => v / 12, gl = spec.ground;
+  const xL = xc - ew / 2 + 0.25, xR = xc + ew / 2 - 0.25;   // top beams / legs just inside the box faces (assumed)
+  const box = (sx, sy, sz, x, y, z, mat) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+    m.position.set(x, y, z); g.add(m); return m;
+  };
+  const starts = spec.names.map((_, i) => spec.northEdge + i * (ns + spec.gap));
+  starts.forEach((z0, i) => {
+    const zc = z0 + ns / 2;
+    // Four walls, open top
+    box(ew, h, 0.04, xc, y0 + h / 2, z0 + 0.02, sheet);
+    box(ew, h, 0.04, xc, y0 + h / 2, z0 + ns - 0.02, sheet);
+    box(0.04, h, ns, xc - ew / 2 + 0.02, y0 + h / 2, zc, sheet);
+    box(0.04, h, ns, xc + ew / 2 - 0.02, y0 + h / 2, zc, sheet);
+    // Stiffener band partway up and a rim at the top, as in the step-down photo
+    for (const y of [y0 + h * 0.42, y0 + h - ft(0, 1.5)]) box(ew + 0.12, ft(0, 3), ns + 0.12, xc, y, zc, band);
+    // Taper to the outlet, then the gate
+    const outlet = gl + inch(spec.outlet);
+    const hop = new THREE.Mesh(hopperGeometry(ew, ns, spec.gate[1], spec.gate[0], y0 - outlet), sheet);
+    hop.position.set(xc, y0, zc);
+    g.add(hop);
+    box(spec.gate[1] + 0.6, inch(spec.gateThick), spec.gate[0] + 0.6, xc, outlet - inch(spec.gateThick) / 2, zc, steel);
+    // Load cells under each corner, on the top support beams
+    for (const z of [z0 + 0.4, z0 + ns - 0.4]) for (const x of [xL, xR])
+      box(0.67, inch(spec.loadCell), 0.67, x, y0 - inch(spec.loadCell) / 2, z, cell);
+    const t = label(spec.names[i], 'tag');
+    t.position.set(xc, y0 + h + 1, zc);
+    tags.add(t);
+  });
+  const zN = spec.northEdge, zS = starts[starts.length - 1] + ns;
+  // Top support beams along both sides, on verticals at each bin's corners (leg spots assumed)
+  const legTop = gl + inch(spec.legs), tb = inch(spec.topBeam);
+  for (const x of [xL, xR]) {
+    box(0.33, tb, zS - zN, x, legTop + tb / 2, (zN + zS) / 2, steel);
+    for (const z0 of starts) for (const z of [z0 + 0.4, z0 + ns - 0.4])
+      box(0.5, legTop - gl, 0.5, x, (gl + legTop) / 2, z, steel);
+  }
+  // Collecting belt: two main beams, idlers, belt; runs past both ends of the row
+  const bN = spec.beltNorth, bS = spec.beltSouth - 0.5, bLen = bS - bN, bMid = (bN + bS) / 2;   // bS: tail pulley centre
+  const [mb0, mb1] = spec.mainBeam.map(inch), span = inch(spec.mainBeamSpan), bw = inch(spec.beltWidth), beltY = gl + inch(spec.belt);
+  for (const x of [xc - span / 2 + 0.17, xc + span / 2 - 0.17]) {
+    box(0.33, mb1 - mb0, bLen, x, gl + (mb0 + mb1) / 2, bMid, steel);
+    for (let z = bN + 1; z < bS; z += 8) box(0.33, mb0, 0.33, x, gl + mb0 / 2, z, steel);   // stub posts
+  }
+  const rubber = new THREE.MeshStandardMaterial({ color: '#1d1f22', roughness: 0.9 });
+  box(bw, 0.03, bLen, xc, beltY - 0.015, bMid, rubber);                                  // carrying side
+  box(bw, 0.03, bLen, xc, gl + mb1 + 0.25, bMid, rubber);                                // return side
+  const roller = new THREE.CylinderGeometry(inch(2.5), inch(2.5), bw + 0.2, 12).rotateZ(Math.PI / 2);
+  for (let z = bN + 1.5; z < bS - 1; z += 4) {
+    const r = new THREE.Mesh(roller, steel); r.position.set(xc, beltY - inch(2.5) - 0.03, z); g.add(r);
+    for (const x of [xc - bw / 2 - 0.15, xc + bw / 2 + 0.15])
+      box(0.15, beltY - inch(2.5) - gl - mb1, 0.15, x, (gl + mb1 + beltY - inch(2.5)) / 2, z, steel);
+  }
+  const pulley = new THREE.CylinderGeometry(0.5, 0.5, bw + 0.3, 16).rotateZ(Math.PI / 2);
+  { const p = new THREE.Mesh(pulley, steel); p.position.set(xc, beltY - 0.5, bS); g.add(p); }   // tail pulley
+  g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const tag = label(spec.name, 'tag');
+  tag.add(...tags.children.map(t => { t.position.sub(new THREE.Vector3(xc, y0 + h + 3, (zN + zS) / 2)); return t; }));   // per-bin names ride on the main tag (Names layer)
+  tag.position.set(xc, y0 + h + 3, (zN + zS) / 2);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Cement silo: I-beam frame on round piers, work platform with the weigh hopper,
+//  and the silo itself on short legs standing on the frame top
+// ============================================================================
+function buildSiloFrame(spec) {
+  const g = new THREE.Group();
+  const { flange: b, depth: d, pocket } = spec.leg, tw = b - 2 * pocket, tf = ft(0, 0.6);
+  const V2 = (x, y) => new THREE.Vector2(x, y), V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  // I profile: x = flange width (east–west), y = depth (becomes north–south)
+  const profile = new THREE.Shape([
+    V2(-b / 2, -d / 2), V2(b / 2, -d / 2), V2(b / 2, -d / 2 + tf), V2(tw / 2, -d / 2 + tf),
+    V2(tw / 2, d / 2 - tf), V2(b / 2, d / 2 - tf), V2(b / 2, d / 2), V2(-b / 2, d / 2),
+    V2(-b / 2, d / 2 - tf), V2(-tw / 2, d / 2 - tf), V2(-tw / 2, -d / 2 + tf), V2(-b / 2, -d / 2 + tf)]);
+  const steel = new THREE.MeshStandardMaterial({ color: '#b9bcb6', roughness: 0.6, metalness: 0.35 });   // painted, as in photo 1
+  const shell = new THREE.MeshStandardMaterial({ color: '#d9dcdc', roughness: 0.5, metalness: 0.3 });
+  const grate = new THREE.MeshStandardMaterial({ color: '#8b9096', roughness: 0.7, metalness: 0.5 });
+  const rubber = new THREE.MeshStandardMaterial({ color: '#2a2b2d', roughness: 0.9 });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  // A square member between two points
+  const strut = (p, q, size, mat = steel) => {
+    const dir = q.clone().sub(p), m = new THREE.Mesh(new THREE.BoxGeometry(size, size, dir.length()), mat);
+    m.position.copy(p).add(q).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(V3(0, 0, 1), dir.normalize());
+    g.add(m); return m;
+  };
+
+  const [x0, z0] = spec.swCentre, [cx, cz] = spec.cc;
+  const corners = [[x0, z0], [x0 - cx, z0], [x0 - cx, z0 - cz], [x0, z0 - cz]];   // SW, SE, NE, NW (east is −Along, north is −Out)
+  const xc = x0 - cx / 2, zc = z0 - cz / 2;
+  const pierTop = spec.slabTop + spec.pier.height, plate = ft(0, 1);
+  const legBase = pierTop + plate, frameTop = legBase + spec.legHeight, deck = frameTop - spec.platform.below;
+
+  // Piers, base plates, frame legs
+  const legGeo = new THREE.ExtrudeGeometry(profile, { depth: spec.legHeight, bevelEnabled: false }).rotateX(-Math.PI / 2);
+  const pierGeo = new THREE.CylinderGeometry(spec.pier.dia / 2, spec.pier.dia / 2, spec.pier.height, 28);
+  for (const [x, z] of corners) {
+    add(pierGeo, slabConcrete, x, spec.slabTop + spec.pier.height / 2, z);
+    add(new THREE.BoxGeometry(b + 0.5, plate, d + 0.5), steel, x, pierTop + plate / 2, z);
+    add(legGeo, steel, x, legBase, z);
+  }
+  // Girts, the ring beam under the deck, and X panels (see `girts` in the spec).
+  // Corners run SW, SE, NE, NW, so the sides are south, east, north, west.
+  const gd = ft(0, 10), yT = deck - 0.5, G = spec.girts, yS = v => spec.slabTop + v;
+  const yNS = yS(G.ns) - gd / 2, yEW = yS(G.ew), yLow = legBase + 0.5, yMid = (yLow + yT) / 2;
+  const panels = {   // girts on each side, and [bottom, top] of each X
+    south: { girts: [yNS, yEW + G.southRaise], xs: [[yEW, yT]] },
+    north: { girts: [yMid], xs: [[yLow, yMid], [yMid, yT]] },
+    east: { girts: [yEW], xs: [[yEW, yT]] },
+    west: { girts: [yEW], xs: [[yEW, yT]] },
+  };
+  corners.forEach(([x, z], i) => {
+    const [x2, z2] = corners[(i + 1) % 4], side = panels[['south', 'east', 'north', 'west'][i]];
+    strut(V3(x, yT, z), V3(x2, yT, z2), 0.6);
+    for (const y of side.girts) strut(V3(x, y, z), V3(x2, y, z2), gd);
+    for (const [ya, yb] of side.xs) {
+      strut(V3(x, ya, z), V3(x2, yb, z2), 0.3);
+      strut(V3(x2, ya, z2), V3(x, yb, z), 0.3);
+    }
+  });
+
+  // Work platform: grating around a hole for the weigh hopper, with a handrail
+  const o = spec.platform.overhang, hole = spec.platform.hole / 2;
+  const pW = x0 + b / 2 + o, pE = x0 - cx - b / 2 - o, pS = z0 + d / 2 + o, pN = z0 - cz - d / 2 - o, t = 0.15;
+  const slabPiece = (xa, xb, za, zb) => add(new THREE.BoxGeometry(Math.abs(xb - xa), t, Math.abs(zb - za)), grate, (xa + xb) / 2, deck - t / 2, (za + zb) / 2);
+  slabPiece(pW, pE, pS, zc + hole); slabPiece(pW, pE, zc - hole, pN);
+  slabPiece(pW, xc + hole, zc + hole, zc - hole); slabPiece(xc - hole, pE, zc + hole, zc - hole);
+  const rail = [[pW, pS], [pE, pS], [pE, pN], [pW, pN]], rH = spec.platform.rail;
+  rail.forEach(([x, z], i) => {
+    const [x2, z2] = rail[(i + 1) % 4];
+    for (const y of [deck + rH, deck + rH / 2]) strut(V3(x, y, z), V3(x2, y, z2), 0.12);
+    const n = Math.max(1, Math.round(Math.hypot(x2 - x, z2 - z) / 5));
+    for (let k = 0; k < n; k++) strut(V3(x + (x2 - x) * k / n, deck, z + (z2 - z) * k / n), V3(x + (x2 - x) * k / n, deck + rH, z + (z2 - z) * k / n), 0.14);
+  });
+
+  // Weigh hopper through the platform; it empties into the charging chute below
+  const hp = spec.hopper, hTop = deck + hp.above, hCylBot = hTop - hp.cyl;
+  add(new THREE.CylinderGeometry(hp.dia / 2, hp.dia / 2, hp.cyl, 32), shell, xc, hTop - hp.cyl / 2, zc);
+  add(new THREE.CylinderGeometry(hp.dia / 2, 0.45, hp.cone, 32), shell, xc, hCylBot - hp.cone / 2, zc);
+  add(new THREE.CylinderGeometry(0.35, 0.35, hp.spout, 16), steel, xc, hCylBot - hp.cone - hp.spout / 2, zc);
+
+  // Silo: legs from the frame top up to the cylinder's bottom ring, cone, cylinder, roof
+  const sp = spec.silo, r = sp.dia / 2, yCyl = deck + sp.legs;
+  for (const [x, z] of corners) {
+    const dir = V3(x - xc, 0, z - zc).normalize();
+    strut(V3(x, frameTop, z), V3(xc + dir.x * r, yCyl, zc + dir.z * r), 0.6);
+  }
+  add(new THREE.CylinderGeometry(r, 0.5, sp.cone, 48), shell, xc, yCyl - sp.cone / 2, zc);
+  add(new THREE.CylinderGeometry(0.4, 0.4, yCyl - sp.cone - hTop + 0.3, 16), steel, xc, (yCyl - sp.cone + hTop) / 2, zc);   // feed spout
+  add(new THREE.CylinderGeometry(r, r, sp.cyl, 64), shell, xc, yCyl + sp.cyl / 2, zc);
+  add(new THREE.CylinderGeometry(r + 0.08, r + 0.08, 0.7, 64), steel, xc, yCyl + 0.35, zc);   // bottom ring
+  add(new THREE.ConeGeometry(r + 0.1, sp.roof, 64), shell, xc, yCyl + sp.cyl + sp.roof / 2, zc);
+  for (let k = 1; k < sp.cyl / 8; k++)   // shell ring seams every 8'
+    add(new THREE.CylinderGeometry(r + 0.03, r + 0.03, 0.08, 64), steel, xc, yCyl + k * 8, zc);
+
+  g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const tag = label(spec.name, 'tag');
+  tag.position.set(xc, yCyl + sp.cyl + sp.roof + 2, zc);
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Inclined aggregate conveyor, head, and charging chute
+// ============================================================================
+function buildConveyor(spec) {
+  const g = new THREE.Group(), V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const steel = new THREE.MeshStandardMaterial({ color: '#59606a', roughness: 0.6, metalness: 0.5 });
+  const rubber = new THREE.MeshStandardMaterial({ color: '#1d1f22', roughness: 0.9 });
+  const gl = spec.ground, x = spec.x, Z = V3(0, 0, 1);
+  // Belt line: from the end of the flat run, through the bracket point over the girt
+  const p0 = V3(x, gl + spec.belt, spec.start);
+  const pG = V3(x, gl + spec.girtTop + spec.brackets + spec.beltAboveStringer, spec.girtZ);
+  const u = pG.clone().sub(p0).normalize(), n = V3(0, -u.z, u.y);   // along the belt, and "up" off it
+  const head = p0.clone().addScaledVector(u, (spec.headAt - p0.z) / u.z), len = head.distanceTo(p0);
+  const at = (s, up = 0, dx = 0) => p0.clone().addScaledVector(u, s).addScaledVector(n, up).add(V3(dx, 0, 0));
+  // Geometry built along +z with +y up is laid along the belt with its +y on `n`
+  // (a bare z → u rotation would roll it over, since the belt runs toward −z).
+  const lay = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(n.clone().cross(u), n, u));
+  const piece = (geo, mat, pos) => {
+    const m = new THREE.Mesh(geo, mat); m.position.copy(pos); m.quaternion.copy(lay); g.add(m); return m;
+  };
+  const post = (a, b, size) => {
+    const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.BoxGeometry(size, size, d.length()), steel);
+    m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(Z, d.normalize()); g.add(m);
+  };
+  const st = spec.span / 2 - 0.17, drop = spec.beltAboveStringer;
+  // Carrying belt troughed on three-roll idlers (no side guards on the incline)
+  const flat = spec.width / 6, wing = spec.width / 3, tr = THREE.MathUtils.degToRad(35), bt = ft(0, 0.4);
+  const wx = flat + wing * Math.cos(tr), wy = wing * Math.sin(tr);
+  const trough = new THREE.Shape([
+    new THREE.Vector2(-wx, wy), new THREE.Vector2(-flat, 0), new THREE.Vector2(flat, 0), new THREE.Vector2(wx, wy),
+    new THREE.Vector2(wx, wy + bt), new THREE.Vector2(flat, bt), new THREE.Vector2(-flat, bt), new THREE.Vector2(-wx, wy + bt)]);
+  piece(new THREE.ExtrudeGeometry(trough, { depth: len, bevelEnabled: false }).translate(0, -wy, -len / 2), rubber, at(len / 2));
+  piece(new THREE.BoxGeometry(spec.width, 0.03, len), rubber, at(len / 2, -drop + 0.9));             // return belt
+  for (const dx of [-st, st]) piece(new THREE.BoxGeometry(0.33, 0.67, len), steel, at(len / 2, -drop + 0.33, dx));   // stringers
+  const r = ft(0, 2.5), centreRoll = new THREE.CylinderGeometry(r, r, 2 * flat, 12).rotateZ(Math.PI / 2);
+  const wingRoll = sgn => new THREE.CylinderGeometry(r, r, wing, 12).rotateZ(Math.PI / 2).rotateZ(sgn * tr)
+    .translate(sgn * (flat + wing * Math.cos(tr) / 2), wing * Math.sin(tr) / 2, 0);
+  const idler = [centreRoll, wingRoll(1), wingRoll(-1)];
+  for (let s = 2; s < len - 1; s += 4) for (const geo of idler) piece(geo, steel, at(s, -wy - r - 0.03));
+  // Supports: a post under each stringer on a 6" foot, crosshead between; L-brackets on the girt
+  for (const off of spec.supports) {
+    const zS = spec.start - off, sAt = (zS - p0.z) / u.z, top = at(sAt, -drop).y - 0.15;
+    for (const dx of [-st, st]) {
+      post(V3(x + dx, gl + 0.04, zS), V3(x + dx, top - 0.2, zS), ft(0, 4));
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(spec.foot, 0.08, spec.foot), steel);
+      foot.position.set(x + dx, gl + 0.04, zS); g.add(foot);
+    }
+    post(V3(x - st - 0.2, top - 0.1, zS), V3(x + st + 0.2, top - 0.1, zS), 0.35);
+  }
+  for (const dx of [-st, st]) post(V3(x + dx, gl + spec.girtTop, spec.girtZ), V3(x + dx, gl + spec.girtTop + spec.brackets, spec.girtZ), 0.25);
+  // Head pulley, then the charging chute to the silo centre and the boot the trucks load from
+  const hp = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, spec.width + 0.4, 20).rotateZ(Math.PI / 2), steel);
+  hp.position.copy(head).addScaledVector(n, -0.6); g.add(hp);
+  // Square charging chute dead centre under the silo: open top under the belt head and
+  // the weigh hopper spout, tapering to its outlet; rubber boot below for the trucks
+  const [cx, cz] = spec.chute, cTop = head.y - 1.3, cBot = gl + spec.chuteBottom;
+  const chuteMat = new THREE.MeshStandardMaterial({ color: '#6c737c', roughness: 0.6, metalness: 0.5, side: THREE.DoubleSide });
+  const chute = new THREE.Mesh(hopperGeometry(spec.chuteTop, spec.chuteTop, spec.chuteOutlet, spec.chuteOutlet, cTop - cBot), chuteMat);
+  chute.position.set(cx, cTop, cz); g.add(chute);
+  const boot = new THREE.Mesh(new THREE.CylinderGeometry(spec.chuteOutlet / 2, spec.chuteOutlet / 2 - 0.1, spec.boot, 20), rubber);
+  boot.position.set(cx, cBot - spec.boot / 2, cz); g.add(boot);
+
+  g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const angle = THREE.MathUtils.radToDeg(Math.atan2(u.y, Math.hypot(u.x, u.z)));
+  const tag = label(`${spec.name} (${angle.toFixed(0)}°, ${fmtFtIn(len)})`, 'tag');
+  tag.position.copy(at(len / 2, 3));
+  return { group: g, tag };
+}
+
+// ============================================================================
+//  Proposed enclosure roof frame: I-beam columns, roof beams, purlins, metal roof
+// ============================================================================
+function buildRoofFrame(spec) {
+  const g = new THREE.Group(), V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const steel = new THREE.MeshStandardMaterial({ color: '#c96a2b', roughness: 0.6, metalness: 0.35 });   // primer red: new steel
+  const wood = new THREE.MeshStandardMaterial({ color: '#c8a26b', roughness: 0.85 });
+  const { flange: b, depth: d } = spec.leg, top = spec.top, bd = spec.beam, T = spec.truss;
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  const member = (p, q, w, h, mat) => {   // w × h member between two points; h is "up" for level or sloped members
+    const dir = q.clone().sub(p), m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dir.length()), mat);
+    m.position.copy(p).add(q).multiplyScalar(0.5);
+    m.lookAt(q);   // +z (the member's length) toward q
+    g.add(m); return m;
+  };
+
+  // Posts, and girders along both lines from the silo's south legs to the south posts.
+  // R(z): how far the roof is raised at z: 0 north of the step at the north posts,
+  // postRaise from there south.
+  const zN = spec.siloZ, zS = Math.max(...spec.postZ), zP = Math.min(...spec.postZ), raise = spec.postRaise ?? 0;
+  const R = z => (z >= zP ? raise : 0);
+  const colH = top + raise - spec.slabTop - spec.plate;
+  for (const x of [spec.westX, spec.eastX]) {
+    for (const z of spec.postZ) {
+      add(new THREE.BoxGeometry(b + 0.6, spec.plate, d + 0.6), steel, x, spec.slabTop + spec.plate / 2, z);
+      add(new THREE.BoxGeometry(b, colH, d), steel, x, spec.slabTop + spec.plate + colH / 2, z);
+    }
+    member(V3(x, top - bd / 2, zN), V3(x, top - bd / 2, zP), b, bd, steel);                       // lower girder
+    member(V3(x, top + raise - bd / 2, zP - d / 2), V3(x, top + raise - bd / 2, zS), b, bd, steel);   // upper girder
+  }
+
+  // Mono-slope trusses across the girders, high on the loader side
+  const o = spec.overhang, [cw, ch] = T.chord;
+  const xHigh = T.high === 'west' ? spec.westX : spec.eastX, xLow = T.high === 'west' ? spec.eastX : spec.westX;
+  const out = Math.sign(xHigh - xLow);   // +1 when the high side is at larger Along
+  const span = Math.abs(xHigh - xLow), slope = T.rise / span, heel = ft(0, 6);
+  const yTop = (x, z) => top + R(z) + heel + slope * (x - xLow) * out;   // top chord's upper edge
+  const xA = xLow - out * (spec.lowOverhang ?? o), xB = xHigh + out * o;   // eaves
+  const zEnd = zS + o, zStart = zN + d / 2 + 0.3, zLast = zS + d / 2 - 0.15;   // end trusses just inside the end walls
+  // Truss stations: each roof level spaced on its own, with one either side of the step
+  const stations = [];
+  for (let z = zStart; z < zP - 0.6; z += T.spacing) stations.push(z);
+  stations.push(zP - 0.6 + cw / 2);
+  for (let z = zP + d / 2; z < zLast - 1; z += T.spacing) stations.push(z);
+  stations.push(zLast);
+  for (const zz of stations) {
+    const yb = top + R(zz), yt = x => yTop(x, zz);
+    member(V3(xLow, yb + ch / 2, zz), V3(xHigh, yb + ch / 2, zz), cw, ch, wood);                            // bottom chord
+    member(V3(xA, yt(xA) - ch / 2, zz), V3(xB, yt(xB) - ch / 2, zz), cw, ch, wood);                        // top chord
+    member(V3(xHigh, yb + ch, zz), V3(xHigh, yt(xHigh) - ch, zz), cw, ch, wood);                            // tall end
+    const n = 3;   // web panels
+    for (let k = 1; k < n; k++) {
+      const xk = xLow + (xHigh - xLow) * k / n, xj = xLow + (xHigh - xLow) * (k - 1) / n;
+      member(V3(xk, yb + ch, zz), V3(xk, yt(xk) - ch, zz), cw, ch, wood);                                   // vertical
+      member(V3(xj, yb + ch, zz), V3(xk, yt(xk) - ch, zz), cw, ch, wood);                                   // diagonal
+    }
+  }
+  // Purlins
+  for (let k = 0; k <= 4; k++) {
+    const x = xA + (xB - xA) * k / 4;
+    member(V3(x, yTop(x, zN) + 0.12, zN), V3(x, yTop(x, zN) + 0.12, zP - 0.5), ft(0, 3.5), ft(0, 1.5), wood);
+    member(V3(x, yTop(x, zP) + 0.12, zP - 0.5), V3(x, yTop(x, zP) + 0.12, zEnd), ft(0, 3.5), ft(0, 1.5), wood);
+  }
+  g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+
+  // ---- Metal cladding (its own layer) ----
+  const C = spec.clad, clad = new THREE.Group();
+  const roofSteel = new THREE.MeshStandardMaterial({ color: '#7f878e', roughness: 0.5, metalness: 0.4, flatShading: true, side: THREE.DoubleSide });
+  const wallSteel = new THREE.MeshStandardMaterial({ color: '#9ba2a8', roughness: 0.55, metalness: 0.35, flatShading: true, side: THREE.DoubleSide });
+  const ribs = { pitch: ft(0, 12), depth: ft(0, 1.1), flatOut: ft(0, 1), flatIn: ft(0, 9) };   // R-panel
+  const roofUnder = (x, z) => yTop(x, z) + 0.25;
+  // A vertical sheet from A to B ([along, out]), bottom yBot, top yTopAt(x, z), ribs facing `outward`
+  // yBot is a height, or a function (x, z) like yTopAt. Sheets running north–south are
+  // split at the roof step so their tops step with it.
+  const sheet = (A, B, yBot, yTopAt, outward, split = true) => {
+    if (split && (A[1] - zP) * (B[1] - zP) < 0) {
+      const t = (zP - A[1]) / (B[1] - A[1]), M = [A[0] + (B[0] - A[0]) * t, zP];
+      const lap = [M[0], M[1] - Math.sign(B[1] - A[1]) * 0.08];   // lap the joint so no steel shows through
+      sheet(A, M, yBot, yTopAt, outward, false); sheet(lap, B, yBot, yTopAt, outward, false); return;
+    }
+    const zMid = (A[1] + B[1]) / 2, at = f => (x, z) => f(x, (A[1] === B[1]) ? z : zMid + (z - zMid) * 0.999);
+    const bot = typeof yBot === 'function' ? at(yBot) : () => yBot, topAt = at(yTopAt);
+    let dx = B[0] - A[0], dz = B[1] - A[1];
+    if (-dz * outward[0] + dx * outward[1] < 0) { [A, B] = [B, A]; dx = -dx; dz = -dz; }
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) return;
+    const P = t => [A[0] + dx * t / len, A[1] + dz * t / len];
+    const geo = corrugatedGeometry(len, t => Math.max(0.05, topAt(...P(t)) - bot(...P(t))), ribs);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, pos.getY(i) + bot(...P(pos.getX(i))));
+    const m = new THREE.Mesh(geo, wallSteel);
+    m.position.set(A[0], 0, A[1]);
+    m.rotation.y = Math.atan2(-dz, dx);
+    m.castShadow = m.receiveShadow = true;
+    clad.add(m);
+  };
+  const gapOut = ribs.depth + 0.04;   // sheets sit just proud of the steel so the rib valleys clear it
+  const xWest = C.westFace + out * gapOut, xEast = spec.eastX - out * (b / 2 + gapOut);
+  const zNorth = zN + d / 2 + gapOut, zSouth = zS + d / 2 + gapOut;
+  // East wall: siding above the cleanout panels; the panels below, each hung from a
+  // header at its top edge and swinging out and up
+  const PN = C.panels, yHdr = spec.slabTop + PN.height, wp = C.wallPost, PD = C.personnel;
+  const nMod = Math.max(1, Math.round((zSouth - zNorth) / PN.module)), modW = (zSouth - zNorth) / nMod;
+  const doorMod = THREE.MathUtils.clamp(Math.floor((PD.atZ - zNorth) / modW), 0, nMod - 1);
+  const m0 = zNorth + doorMod * modW, m1 = m0 + modW, dzC = (m0 + m1) / 2, d0 = dzC - PD.width / 2, d1 = dzC + PD.width / 2;
+  const yDoorHead = spec.slabTop + PD.height, roofAt = (x, z) => roofUnder(x, z);
+  sheet([xEast, zNorth], [xEast, m0], yHdr, roofAt, [-out, 0]);           // above the panels
+  sheet([xEast, m1], [xEast, zSouth], yHdr, roofAt, [-out, 0]);
+  sheet([xEast, m0], [xEast, d0], spec.slabTop, roofAt, [-out, 0]);       // the door module: full-height siding
+  sheet([xEast, d1], [xEast, m1], spec.slabTop, roofAt, [-out, 0]);
+  sheet([xEast, d0], [xEast, d1], yDoorHead, roofAt, [-out, 0]);
+  const xPost = spec.eastX - out * (b / 2 - wp / 2);   // wall posts in line with the outer flange of the main posts
+  const galv = new THREE.MeshStandardMaterial({ color: '#a4abb0', roughness: 0.45, metalness: 0.6 });   // galvanized light framing
+  for (let k = 0; k <= nMod; k++) {   // wall posts at the module joints, slab to roof
+    const z = k === 0 ? zN + d / 2 + wp / 2 : k === nMod ? zS + d / 2 - wp / 2 : zNorth + k * modW;   // end posts tuck inside the end walls
+    member(V3(xPost, spec.slabTop, z), V3(xPost, roofUnder(xPost, z) - 0.3, z), wp, wp, galv);
+  }
+  for (const z of [d0 - wp / 2, d1 + wp / 2]) member(V3(xPost, spec.slabTop, z), V3(xPost, yDoorHead + wp, z), wp, wp, galv);   // door jamb posts
+  member(V3(xPost, yDoorHead + wp / 2, d0 - wp), V3(xPost, yDoorHead + wp / 2, d1 + wp), wp, wp, galv);           // door header
+  member(V3(xPost, yHdr, zN + d / 2), V3(xPost, yHdr, zS + d / 2), wp, wp, galv);   // header girt over the panels
+  for (const [za, zb] of [[zNorth, m0], [m1, zSouth]]) {   // drip flashing over the panel heads (not across the door module)
+    if (zb - za < 0.1) continue;
+    const f = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, zb - za), new THREE.MeshStandardMaterial({ color: '#7d848a', roughness: 0.5, metalness: 0.4 }));
+    f.position.set(xEast - out * 0.08, yHdr + 0.05, (za + zb) / 2); clad.add(f);
+  }
+  const panelMat = new THREE.MeshStandardMaterial({ color: '#8f969c', roughness: 0.55, metalness: 0.35, flatShading: true, side: THREE.DoubleSide });
+  const panels = [];
+  for (let k = 0; k < nMod; k++) {
+    if (k === doorMod) continue;
+    const hinge = new THREE.Group();   // pivots on the header line
+    hinge.position.set(xEast - out * 0.16, yHdr, zNorth + k * modW);   // hinge stands proud of the siding and flashing so the panel folds flat over them
+    const leaf = new THREE.Mesh(corrugatedGeometry(modW - 0.06, PN.height - 0.04, ribs), panelMat);
+    leaf.rotation.y = -out * Math.PI / 2;            // sheet runs along the wall, ribs facing out
+    leaf.position.set(0, -PN.height + 0.02, out > 0 ? 0.03 : modW - 0.03);
+    leaf.castShadow = leaf.receiveShadow = true;
+    hinge.add(leaf);
+    clad.add(hinge);
+    panels.push(hinge);
+  }
+  panels.forEach(h => { h.userData.swing = ['z', -out]; });   // axis and direction that swings it outward
+
+  // Corner trim
+  {
+    const trimMat = new THREE.MeshStandardMaterial({ color: '#7d848a', roughness: 0.5, metalness: 0.4 });
+    for (const [x, z] of [[xEast, zNorth], [xEast, zSouth], [xWest, zNorth], [xWest, zSouth]]) {
+      const yb = x === xWest && z === zSouth ? RAMP.top : x === xWest ? spec.slabTop : spec.slabTop;
+      const yt = roofUnder(x, z) + 0.1, m = new THREE.Mesh(new THREE.BoxGeometry(0.45, yt - yb, 0.45), trimMat);
+      m.position.set(x, (yt + yb) / 2, z); clad.add(m);
+    }
+  }
+
+  // South wall: the same flip-up panels along the bottom for belt service, siding above
+  sheet([xWest, zSouth], [xEast, zSouth], yHdr, roofAt, [0, 1]);
+  {
+    const xa = Math.min(xWest, xEast), xb = Math.max(xWest, xEast), zPost = zS + d / 2 - wp / 2;
+    const nS = Math.max(1, Math.ceil((xb - xa) / PN.module)), wS = (xb - xa) / nS;   // no wider than an east module
+    for (let k = 1; k < nS; k++) member(V3(xa + k * wS, spec.slabTop, zPost), V3(xa + k * wS, roofAt(xa + k * wS, zPost) - 0.3, zPost), wp, wp, galv);
+    member(V3(spec.westX, yHdr, zPost), V3(spec.eastX, yHdr, zPost), wp, wp, galv);   // header girt
+    const f = new THREE.Mesh(new THREE.BoxGeometry(xb - xa, 0.3, 0.12), new THREE.MeshStandardMaterial({ color: '#7d848a', roughness: 0.5, metalness: 0.4 }));
+    f.position.set((xa + xb) / 2, yHdr + 0.05, zSouth + 0.08); clad.add(f);   // drip flashing
+    for (let k = 0; k < nS; k++) {
+      const hinge = new THREE.Group();
+      hinge.position.set(xa + k * wS, yHdr, zSouth + 0.16);
+      const leaf = new THREE.Mesh(corrugatedGeometry(wS - 0.06, PN.height - 0.04, ribs), panelMat);
+      leaf.position.set(0.03, -PN.height + 0.02, 0);   // sheet along +x, ribs facing south
+      leaf.castShadow = leaf.receiveShadow = true;
+      hinge.add(leaf);
+      hinge.userData.swing = ['x', -1];
+      clad.add(hinge);
+      panels.push(hinge);
+    }
+  }
+  EAST_PANELS.set = open => panels.forEach(h => {
+    const [axis, dir] = h.userData.swing;
+    h.rotation[axis] = open ? dir * THREE.MathUtils.degToRad(PN.open) : 0;
+  });
+
+  // Personnel door in the east wall (built facing +z, then turned to face out)
+  {
+    const frameMat = new THREE.MeshStandardMaterial({ color: '#4d5359', roughness: 0.6, metalness: 0.5 });
+    const doorMat2 = new THREE.MeshStandardMaterial({ color: '#5f7d95', roughness: 0.5, metalness: 0.3 });
+    const dg = new THREE.Group(), t = 0.15, W = PD.width, H = PD.height;
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(W - 0.25, H - 0.12, 0.15), doorMat2);
+    leaf.position.set(0, (H - 0.12) / 2, 0.02); dg.add(leaf);
+    for (const sx of [-1, 1]) {
+      const j = new THREE.Mesh(new THREE.BoxGeometry(t, H, 0.3), frameMat);
+      j.position.set(sx * (W / 2 - t / 2), H / 2, 0.02); dg.add(j);
+    }
+    const head = new THREE.Mesh(new THREE.BoxGeometry(W, t, 0.3), frameMat);
+    head.position.set(0, H - t / 2, 0.02); dg.add(head);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), frameMat);
+    knob.position.set(W / 2 - 0.35, 3, 0.17); dg.add(knob);
+    dg.rotation.y = -out * Math.PI / 2;   // face east (outward)
+    dg.position.set(xEast, spec.slabTop, dzC);
+    clad.add(dg);
+  }
+
+  // North wall against the silo frame, with a cut-out where the incline belt passes through
+  const B = C.belt, yBelt = B.y0 + (B.y1 - B.y0) * (zNorth - B.z0) / (B.z1 - B.z0);
+  const hole = { x0: B.x - B.half, x1: B.x + B.half, y0: yBelt - B.depth - 0.6, y1: yBelt + 2 };
+  const [hw, he] = [Math.max(hole.x0, hole.x1), Math.min(hole.x0, hole.x1)];   // west/east edges (west is larger Along)
+  sheet([xWest, zNorth], [hw, zNorth], spec.slabTop, (x, z) => roofUnder(x, z), [0, -1]);
+  sheet([he, zNorth], [xEast, zNorth], spec.slabTop, (x, z) => roofUnder(x, z), [0, -1]);
+  sheet([hw, zNorth], [he, zNorth], spec.slabTop, () => hole.y0, [0, -1]);
+  sheet([hw, zNorth], [he, zNorth], hole.y1, (x, z) => roofUnder(x, z), [0, -1]);
+  // West (loader) wall: on the wall caps, open over the bin row up to the door head
+  let zPrev = zNorth;
+  const stops = [...C.westBottoms.map(([z, y]) => [Math.min(z, zSouth), y])];
+  for (const [zEndStretch, yBot] of stops) {
+    if (zEndStretch <= zPrev) continue;
+    const pieces = [[zPrev, zEndStretch]];
+    for (const [a, c] of pieces) {
+      const o0 = Math.max(a, C.opening[0]), o1 = Math.min(c, C.opening[1]);
+      if (o1 > o0) {   // split around the door opening
+        sheet([xWest, a], [xWest, o0], yBot, (x, z) => roofUnder(x, z), [out, 0]);
+        sheet([xWest, o0], [xWest, o1], C.doorHead, (x, z) => roofUnder(x, z), [out, 0]);
+        sheet([xWest, o1], [xWest, c], yBot, (x, z) => roofUnder(x, z), [out, 0]);
+      } else sheet([xWest, a], [xWest, c], yBot, (x, z) => roofUnder(x, z), [out, 0]);
+    }
+    zPrev = zEndStretch;
+    if (zPrev >= zSouth) break;
+  }
+  // Roof: two sheets (below and above the step), ribs running down the slope. The
+  // upper roof overhangs the step band by 6".
+  const roofSheet = (z0, z1, lift) => {
+    const up = V3(xB - xA, yTop(xB, zN) - yTop(xA, zN), 0).normalize();   // up the slope (low → high)
+    let X = V3(0, 0, 1), origin = V3(xA, yTop(xA, zN) + lift + 0.3, z0);
+    if (X.clone().cross(up).y < 0) { X = V3(0, 0, -1); origin.z = z1; }
+    const geo = corrugatedGeometry(z1 - z0, Math.hypot(xB - xA, yTop(xB, zN) - yTop(xA, zN)), ribs);
+    geo.applyMatrix4(new THREE.Matrix4().makeBasis(X, up, X.clone().cross(up)).setPosition(origin));
+    const roof = new THREE.Mesh(geo, roofSteel);
+    roof.castShadow = roof.receiveShadow = true;
+    clad.add(roof);
+  };
+  roofSheet(zN - o, zP, 0);
+  roofSheet(zP - 0.5, zEnd, raise);
+  if (raise > 0) {   // band closing the step, from the lower roof up to the upper roof
+    const zB = zP - 0.5 + gapOut;
+    sheet([xWest, zB], [xEast, zB], (x) => roofUnder(x, zP - 1) + 0.15, (x) => roofUnder(x, zP), [0, -1]);
+  }
+  // Sliding doors: one per bin, each on its own track outside the wall, lapping 4"
+  const [bN, binW, gap, nBins] = C.bins, doorW = binW + 2 * ft(0, 4), doorH = C.doorHead - RAMP.top + 0.33;
+  const centres = Array.from({ length: nBins }, (_, i) => bN + i * (binW + gap) + binW / 2);
+  const doorMat = new THREE.MeshStandardMaterial({ color: '#868d93', roughness: 0.55, metalness: 0.35, flatShading: true, side: THREE.DoubleSide });
+  const trackMat = new THREE.MeshStandardMaterial({ color: '#4d5359', roughness: 0.6, metalness: 0.5 });
+  const doors = centres.map((c, i) => {
+    const xDoor = xWest + out * (0.3 + i * 0.3);
+    // Track runs a door's width past the north end of the opening so all three can park clear of the bins
+    const tN = C.opening[0] - doorW - 1, tS = C.opening[1] + doorW / 2 - 4 / 12;
+    const track = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, tS - tN), trackMat);
+    track.position.set(xDoor, C.doorHead + 0.6, (tN + tS) / 2);
+    clad.add(track);
+    const door = new THREE.Group();
+    const panel = new THREE.Mesh(corrugatedGeometry(doorW, doorH, ribs), doorMat);
+    panel.position.set(-doorW / 2, 0, 0);   // local x centred on the door
+    panel.castShadow = panel.receiveShadow = true;
+    door.add(panel);
+    door.rotation.y = out > 0 ? -Math.PI / 2 : Math.PI / 2;   // sheet runs north–south, ribs facing the ramp
+    door.position.set(xDoor, RAMP.top + 0.05, c);
+    clad.add(door);
+    return door;
+  });
+  LOADER_DOORS.set = cfg => {   // 'closed', or the index of the bin left covered (all three doors stack there)
+    const parked = C.opening[0] - doorW / 2 - 0.5;   // stacked over the siding just north of the opening
+    doors.forEach((door, i) => { door.position.z = cfg === 'closed' ? centres[i] : cfg === 'all' ? parked : centres[+cfg]; });
+  };
+  layers.cladding.add(clad);
+  const tag = label(spec.name, 'tag');
+  tag.position.set((xA + xB) / 2, top + T.rise + 2, (zN + zS) / 2);
+  return { group: g, tag };
+}
+
+const LOADER_DOORS = { set: () => {} };
+const EAST_PANELS = { set: () => {} };
+
+const BUILDERS = { container: buildContainer, leanTo: buildLeanTo, blockWall: buildBlockWall, ramp: buildRamp, pile: buildPile, slab: buildSlab, aggBins: buildAggBins, siloFrame: buildSiloFrame, conveyor: buildConveyor, roofFrame: buildRoofFrame };
+
+// ============================================================================
+//  Build the plant
+// ============================================================================
+for (const spec of PLANT) {
+  const built = BUILDERS[spec.kind](spec);
+  // Pieces with an along/out/up anchor are placed here; the rest position themselves
+  if ('along' in spec) built.group.position.set(spec.along, spec.up ?? 0, spec.out ?? 0);
+  built.group.name = spec.id;
+  (spec.layer ? layers[spec.layer] : plant).add(built.group);
+  built.tag.position.add(built.group.position);
+  layers.tags.add(built.tag);
+}
+
+{
+  const sel = document.getElementById('door-config');
+  sel.addEventListener('change', () => LOADER_DOORS.set(sel.value));
+  LOADER_DOORS.set(sel.value);
+  const pan = document.getElementById('panels-open');
+  pan.addEventListener('change', () => EAST_PANELS.set(pan.checked));
+  EAST_PANELS.set(pan.checked);
+}
+
+// Dimensions for the container stack
+const dimMat = new THREE.LineBasicMaterial({ color: '#c06a00' });
+function dim(a, b, offset, text) {
+  const A = a.clone().add(offset), B = b.clone().add(offset);
+  const g = new THREE.Group();
+  g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([a, A, A, B, B, b]), dimMat));
+  const tick = new THREE.SphereGeometry(0.12, 8, 6);
+  for (const p of [A, B]) { const s = new THREE.Mesh(tick, new THREE.MeshBasicMaterial({ color: '#c06a00' })); s.position.copy(p); g.add(s); }
+  const l = label(text, 'dim'); l.position.copy(A).lerp(B, 0.5); g.add(l);
+  layers.dims.add(g);
+}
+{
+  const { L, W, H } = CONTAINER_20, V = (x, y, z) => new THREE.Vector3(x, y, z);
+  dim(V(0, 0.05, 0), V(L, 0.05, 0), V(0, 0, 2.5), `${fmtFtIn(L)} long`);
+  dim(V(0, 0.05, 0), V(0, 0.05, -W), V(-2.5, 0, 0), `${fmtFtIn(W)} wide`);
+  dim(V(0, 0, 0), V(0, H, 0), V(-1.5, 0, 1.5), fmtFtIn(H));
+  dim(V(0, H, 0), V(0, 2 * H, 0), V(-1.5, 0, 1.5), fmtFtIn(H));
+  dim(V(L, 0, 0), V(L, 2 * H, 0), V(1.5, 0, 1.5), `${fmtFtIn(2 * H)} stack`);
+}
+for (const w of PLANT.filter(p => p.kind === 'blockWall' && !p.placeholder)) {
+  const { T, H, CAP_H } = BLOCK;
+  const run = new THREE.Vector3(w.run[0], 0, w.run[1]), thick = new THREE.Vector3(w.thick[0], 0, w.thick[1]);
+  const at = (x, y) => new THREE.Vector3(w.start[0], y, w.start[1]).addScaledVector(run, x).addScaledVector(thick, T);
+  const lens = w.courses.map(runLength(w)), full = Math.max(...lens);
+  const topLen = lens[lens.length - 1];   // top course of blocks
+  const base = w.base ?? 0, y0 = Math.max(base, 0);
+  const top = base + w.courses.length * H + (w.caps ? CAP_H : 0);
+  const out = (k, along = 0) => thick.clone().multiplyScalar(k).addScaledVector(run, along);
+  // Dimensions go on the back face: overall length at grade, height where the top ends
+  dim(at(0, 0.05), at(full, 0.05), out(2), `${fmtFtIn(full)} long`);
+  const hText = base < 0 ? `${fmtFtIn(top - base)} (top at +${fmtFtIn(top)})` : fmtFtIn(top - base);
+  if (w.exposed) {   // walls mostly in the ground: dimension what shows instead
+    const [e0, e1] = w.exposed, inch = v => `${+(v * 12).toFixed(1)}"`;
+    dim(at(0, top - e0), at(0, top), out(1, 0.6), `${inch(e0)} showing`);
+    dim(at(full, top - e1), at(full, top), out(1, -0.6), `${inch(e1)} showing (grade ~${inch(e0 - e1)} higher)`);
+  } else dim(at(topLen, base), at(topLen, top), out(1, 0.5), hText);
+  if (topLen < full - 1e-6) {   // step-down: shorter upper courses
+    dim(at(0, top), at(topLen, top), out(1.5), `${fmtFtIn(topLen)} top`);
+    const capped = w.caps && runLength(w)(w.caps) >= full - 0.5;
+    const stepTop = base + H * lens.filter(l => l >= full - 1e-6).length + (capped ? CAP_H : 0);
+    dim(at(full, y0), at(full, stepTop), out(1, 0.5), `${fmtFtIn(stepTop - y0)} step`);
+  }
+}
+{
+  // Where the walls sit relative to the origin
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const [wf, se] = PLANT.find(p => p.id === 'east-wall').start;
+  const inch = v => `${+(v * 12).toFixed(2)}"`;
+  dim(V(0, 0.05, 0), V(wf, 0.05, 0), V(0, 0, -4), `${fmtFtIn(-wf)} (${inch(-wf)})`);
+  dim(V(wf, 0.05, 0), V(wf, 0.05, se), V(1.2, 0, 0), `${fmtFtIn(se)} (${inch(se)})`);
+  {   // ramp inside width, laid on the ramp surface a little west of the east wall
+    const x = EAST_INNER + 12, y = RAMP.top - 12 * (RAMP.top - RAMP.bottom) / (RAMP.toe - EAST_INNER) + 0.25;
+    dim(V(x, y, RAMP.northEdge), V(x, y, RAMP.northEdge + RAMP.insideWidth), V(0, 0, 0), `${fmtFtIn(RAMP.insideWidth)} inside (from the bins chain)`);
+  }
+  // South wall, taped off the containers' south corners
+  dim(V(0, 0.1, 0), V(0, 0.1, SOUTH_FACE_AT(0)), V(0.6, 0, 0), `68.5" (taped)`);
+  dim(V(CONTAINER_20.L, 0.1, 0), V(CONTAINER_20.L, 0.1, SOUTH_FACE_AT(CONTAINER_20.L)), V(-0.6, 0, 0), `73" (taped)`);
+
+  // Silo frame: tie to the east wall cap, outside-to-outside, and the check diagonal
+  {
+    const sf = PLANT.find(p => p.id === 'silo-frame'), { flange: b, depth: d } = sf.leg;
+    const y = sf.slabTop + sf.pier.height + 1, [x0, z0] = sf.swCentre, [cx, cz] = sf.cc;
+    const xW = x0 + b / 2, xE = x0 - cx - b / 2, zS = z0 + d / 2, zN = z0 - cz - d / 2;
+    dim(V(x0, y, EAST_CAP_NORTH), V(x0, y, zS), V(0, 0, 0), `35" cap → SW leg`);
+    dim(V(xW, y, zS), V(xE, y, zS), V(0, 0, 1.2), `140" o-o`);
+    dim(V(xW, y, zS), V(xW, y, zN), V(1.2, 0, 0), `167" o-o`);
+    dim(V(xW, y + 0.3, zS), V(xE, y + 0.3, zN), V(0, 0, 0), `${fmtFtIn(Math.hypot(xW - xE, zS - zN))} diagonal`);
+    // Heights above the slab, up the SW leg's south side
+    const s0 = sf.slabTop, pierTop = s0 + sf.pier.height, frameTop = pierTop + ft(0, 1) + sf.legHeight;
+    const deck = frameTop - sf.platform.below, yCyl = deck + sf.silo.legs, hp = sf.hopper;
+    const cv = PLANT.find(p => p.id === 'agg-incline'), bootBot = s0 + cv.chuteBottom - cv.boot, zD = zS + 1.5;
+    dim(V(xW + 0.6, s0, z0), V(xW + 0.6, s0 + sf.girts.ns, z0), V(0, 0, 0), `134" girt (taped)`);
+    dim(V(SILO_CENTRE[0] + 1.6, s0 + cv.girtTop, SILO_CENTRE[1]), V(SILO_CENTRE[0] + 1.6, s0 + cv.chuteBottom, SILO_CENTRE[1]), V(0, 0, 0), `chute bottom ~30" above girt`);
+    const [f1, f2] = cv.supports.map(o => cv.start - o), xs = cv.x + 2.2, ys = s0 + 0.1;
+    dim(V(xs, ys, cv.start), V(xs, ys, f1), V(0, 0, 0), `67" pivot → support 1`);
+    dim(V(xs, ys, f1 + cv.foot / 2), V(xs, ys, f2 - cv.foot / 2), V(0.8, 0, 0), `190" feet, outside`);
+    dim(V(xW, s0, zD), V(xW, pierTop, zD), V(0.8, 0, 0), `${+(sf.pier.height * 12).toFixed(1)}" piers`);
+    dim(V(xW, pierTop, zD), V(xW, frameTop, zD), V(0.8, 0, 0), `${fmtFtIn(sf.legHeight)} legs`);
+    dim(V(xW, s0, zD), V(xW, deck, zD), V(2.4, 0, 0), `deck ${fmtFtIn(deck - s0)} above slab`);
+    dim(V(SILO_CENTRE[0], s0, SILO_CENTRE[1]), V(SILO_CENTRE[0], bootBot, SILO_CENTRE[1]), V(0, 0, 0), `≈${fmtFtIn(bootBot - s0)} under boot (approx)`);
+    dim(V(xW, yCyl, zD), V(xW, yCyl + sf.silo.cyl, zD), V(2.4, 0, 0), `≈${fmtFtIn(sf.silo.cyl)} cylinder, ${sf.silo.dia}' dia`);
+  }
+
+  // Lean-to
+  const lt = PLANT.find(p => p.id === 'lean-to'), { L, W } = CONTAINER_20;
+  dim(V(2, 0.1, -W), V(2, 0.1, NORTH_WALL_SOUTH), V(0, 0, 0), `137" to north wall (taped)`);
+  const lx0 = lt.fromEast, lx1 = L - lt.fromWest, lz = -W - lt.depth;
+  dim(V(0, 0.06, -W), V(lx0, 0.06, -W), V(0, 0, -1.2), `${fmtFtIn(lx0)} (${inch(lx0)})`);
+  dim(V(lx1, 0.06, -W), V(L, 0.06, -W), V(0, 0, -1.2), inch(lt.fromWest));
+  dim(V(lx0, 0.06, lz), V(lx1, 0.06, lz), V(0, 0, -2.5), `${fmtFtIn(lx1 - lx0)} wide`);
+  dim(V(lx1, 0.06, -W), V(lx1, 0.06, lz), V(2, 0, 0), `${fmtFtIn(lt.depth)} (${inch(lt.depth)})`);
+  dim(V(lx1, 0, -W), V(lx1, lt.heightAtContainer, -W), V(1, 0, -0.5), fmtFtIn(lt.heightAtContainer));
+  dim(V(lx1, 0, lz), V(lx1, lt.heightAtDrip, lz), V(1, 0, -0.5), `${fmtFtIn(lt.heightAtDrip)} drip`);
+  const dr = lt.door, dzx = lx0 + dr.fromEast;
+  dim(V(dzx, ft(0, 1) + dr.height, lz - 0.3), V(dzx + dr.width, ft(0, 1) + dr.height, lz - 0.3), V(0, 0.9, 0),
+    `door ${inch(dr.width)} × ${inch(dr.height)}, slides ${dr.slides}`);
+
+  // Slab
+  const sl = PLANT.find(p => p.id === 'north-slab'), [sx0, sx1] = sl.alongRange, [sz0, sz1] = sl.outRange, sy = LOW_GRADE + 0.15;
+  dim(V(EAST_FACE, sy, sz0), V(sx0, sy, sz0), V(0, 0, -1.5), `${fmtFtIn(EAST_FACE - sx0)} (298") past east wall`);
+  dim(V(sx0, sy, sz0), V(sx1, sy, sz0), V(0, 0, -3.5), `${fmtFtIn(sx1 - sx0)} slab`);
+  dim(V(sx1, sy, sz1), V(sx1, sy, sz0), V(1.5, 0, 0), `${fmtFtIn(sz1 - sz0)} (376")`);
+
+  const es = PLANT.find(p => p.id === 'east-slab'), [ex0] = es.alongRange, [ez0, ez1] = es.outRange;
+  dim(V(ex0, sy, ez0), V(EAST_FACE, sy, ez0), V(0, 0, 1.5), fmtFtIn(EAST_FACE - ex0));
+  dim(V(ex0, sy, ez0), V(ex0, sy, ez1), V(-1.5, 0, 0), `${fmtFtIn(ez1 - ez0)} (50' + 170")`);
+
+  const inf = PLANT.find(p => p.id === 'infill-slab'), [ix0, ix1] = inf.alongRange, [iz0, iz1] = inf.outRange;
+  dim(V(ix0, sy, iz0), V(ix0, sy, iz1), V(-1.5, 0, 0), `${fmtFtIn(iz1 - iz0)} (93")`);
+
+  // Aggregate bins
+  const ab = PLANT.find(p => p.id === 'agg-bins'), abN = ab.northEdge, abS = abN + 3 * ab.size.ns + 2 * ab.gap;
+  const abW = ab.westFace, abE = abW - ab.size.ew, abTop = ab.bottom + ab.size.h;
+  dim(V(abW, RAMP.top, EAST_LINE_START), V(abW, RAMP.top, abN), V(0.6, 0, 0), `56" to step up`);
+  dim(V(abE, abTop, abN), V(abE, abTop, abS), V(-1.2, 0, 0), `${fmtFtIn(abS - abN)} (3 × 10' + 2 × 4")`);
+  dim(V(abE, abTop, abS), V(abW, abTop, abS), V(0, 0, 1.2), `${fmtFtIn(ab.size.ew)} (109")`);
+  dim(V(abE, ab.bottom, abS), V(abE, abTop, abS), V(-0.8, 0, 0.8), `${fmtFtIn(ab.size.h)} (63")`);
+  dim(V(abW + 1, RAMP.top, abS), V(abW + 1, ab.bottom, abS), V(0, 0, 0.8), `17.5" above caps`);
+  {
+    const gl = ab.ground, xc = abW - ab.size.ew / 2, zE = abS + 2.6, I = v => gl + v / 12;
+    const xEast = abE - 0.5;
+    dim(V(xEast, gl, zE), V(xEast, I(ab.legs), zE), V(-0.8, 0, 0), `${ab.legs}" legs`);
+    dim(V(xEast, I(ab.legs + ab.topBeam), zE), V(xEast, ab.bottom, zE), V(-0.8, 0, 0), `${ab.loadCell}" load cells`);
+    dim(V(xc, gl, zE), V(xc, I(ab.belt), zE), V(0, 0, 0.8), `${ab.belt}" belt`);
+    dim(V(xc + 1.3, gl, abS - 0.5), V(xc + 1.3, I(ab.outlet), abS - 0.5), V(0, 0, 0), `${ab.outlet}" outlet`);
+    dim(V(xc - ab.mainBeamSpan / 24, I(ab.mainBeam[0]), zE), V(xc + ab.mainBeamSpan / 24, I(ab.mainBeam[0]), zE), V(0, -0.6, 0),
+      `${ab.mainBeamSpan}" o-o, ${ab.mainBeam[0]}–${ab.mainBeam[1]}" beams`);
+  }
+
+  // Bin walls, centre to centre, at their open west ends
+  const xEnd = EAST_INNER + BINS.wallLen + 2;
+  for (let i = 0; i < BIN_WALL_CENTRES.length - 1; i++)
+    dim(V(xEnd, 0.06, BIN_WALL_CENTRES[i]), V(xEnd, 0.06, BIN_WALL_CENTRES[i + 1]), V(1.5, 0, 0), `${fmtFtIn(BINS.spacing)} c-c`);
+}
+
+// Origin marker + Along/Out axes
+{
+  const s = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12), new THREE.MeshBasicMaterial({ color: '#d32f2f' }));
+  layers.axes.add(s);
+  const o = label('0,0', 'axis'); o.position.set(-0.8, 0.6, 1); layers.axes.add(o);
+  const arrow = (dir, text) => {
+    const a = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0.1, 0.6), 10, '#d32f2f', 1.4, 0.8);
+    layers.axes.add(a);
+    const l = label(text, 'axis'); l.position.copy(dir).multiplyScalar(11.5).setY(0.4); layers.axes.add(l);
+  };
+  arrow(new THREE.Vector3(1, 0, 0), '+Along');
+  arrow(new THREE.Vector3(0, 0, 1), '+Out');
+}
+
+// Grid in the plant frame (10 ft and 50 ft), so it lines up with tape measurements
+{
+  const g10 = new THREE.GridHelper(400, 40, '#4e463c', '#4e463c');
+  g10.material.transparent = true; g10.material.opacity = 0.45; g10.position.y = 0.02;
+  const g50 = new THREE.GridHelper(400, 8, '#2e2924', '#2e2924');
+  g50.material.transparent = true; g50.material.opacity = 0.8; g50.position.y = 0.03;
+  layers.grid.add(g10, g50);
+}
+
+// ============================================================================
+//  Orientation
+// ============================================================================
+const plantCenter = new THREE.Vector3(CONTAINER_20.L / 2, 0, -CONTAINER_20.W / 2);
+
+function headings(o) {
+  const trueReading = o.measuredBearing + (o.reference === 'magnetic' ? o.declination : 0) + o.trim;
+  let along;   // true bearing of +Along
+  if (o.method === 'alongLength') along = trueReading;
+  // leanToOut: the reading is the direction you face standing on the origin side looking at the containers
+  else along = o.farEnd === 'left' ? trueReading - 90 : trueReading + 90;
+  const out = o.farEnd === 'left' ? along - 90 : along + 90;               // origin side faces
+  return { along: norm360(along), out: norm360(out) };
+}
+
+function buildCompassRing(center, decl) {
+  const grp = layers.compass;
+  grp.clear();
+  const R = 45, y = 0.06;
+  const mat = new THREE.LineBasicMaterial({ color: '#2b3540', transparent: true, opacity: 0.7 });
+  const ring = [];
+  for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; ring.push(new THREE.Vector3(Math.sin(a) * R, y, -Math.cos(a) * R)); }
+  grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring), mat));
+  const ticks = [];
+  for (let d = 0; d < 360; d += 10) {
+    const a = THREE.MathUtils.degToRad(d), r0 = d % 90 === 0 ? R - 5 : d % 30 === 0 ? R - 2.5 : R - 1.2;
+    ticks.push(new THREE.Vector3(Math.sin(a) * r0, y, -Math.cos(a) * r0), new THREE.Vector3(Math.sin(a) * R, y, -Math.cos(a) * R));
+  }
+  grp.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(ticks), mat));
+  for (const [d, t] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']]) {
+    const a = THREE.MathUtils.degToRad(d);
+    const l = label(t, `compass${d === 0 ? ' n' : ''}`);
+    l.position.set(Math.sin(a) * (R + 3), 0.5, -Math.cos(a) * (R + 3));
+    grp.add(l);
+  }
+  // True-north arrow head on the ring, plus a magnetic-north marker
+  const head = new THREE.Shape([new THREE.Vector2(-2, 0), new THREE.Vector2(2, 0), new THREE.Vector2(0, 5)]);
+  const tri = new THREE.Mesh(new THREE.ShapeGeometry(head), new THREE.MeshBasicMaterial({ color: '#c62828' }));
+  tri.rotation.x = -Math.PI / 2; tri.position.set(0, y + 0.01, -R + 0.5);
+  grp.add(tri);
+  const m = THREE.MathUtils.degToRad(decl);
+  grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(Math.sin(m) * (R - 8), y, -Math.cos(m) * (R - 8)),
+    new THREE.Vector3(Math.sin(m) * (R + 1), y, -Math.cos(m) * (R + 1))]),
+    new THREE.LineBasicMaterial({ color: '#5a6570' })));
+  const ml = label(`Mag N (${Math.abs(decl)}° ${decl < 0 ? 'W' : 'E'})`, 'compass mag');
+  ml.position.set(Math.sin(m) * (R + 6), 0.5, -Math.cos(m) * (R + 6));
+  grp.add(ml);
+  grp.position.copy(center).setY(0);
+}
+
+function applyOrientation() {
+  const o = SITE.orientation;
+  const h = headings(o);
+  plant.scale.z = o.farEnd === 'left' ? -1 : 1;
+  plantRot.rotation.y = THREE.MathUtils.degToRad(90 - h.along);
+  plantRot.updateMatrixWorld(true);
+  buildCompassRing(plant.localToWorld(plantCenter.clone()), o.declination);
+  document.getElementById('o-summary').innerHTML =
+    `Long axis (origin end → far end): <b>${fmtBearing(h.along)}</b> true<br>` +
+    `Origin side faces: <b>${fmtBearing(h.out)}</b> true<br>` +
+    `Lean-to side faces: <b>${fmtBearing(h.out + 180)}</b> true`;
+}
+
+// Panel wiring
+const inputs = {
+  measuredBearing: document.getElementById('o-bearing'),
+  reference: document.getElementById('o-ref'),
+  declination: document.getElementById('o-decl'),
+  method: document.getElementById('o-method'),
+  farEnd: document.getElementById('o-far'),
+  trim: document.getElementById('o-trim'),
+};
+for (const [k, el] of Object.entries(inputs)) {
+  el.value = SITE.orientation[k];
+  el.addEventListener('input', () => {
+    SITE.orientation[k] = el.type === 'number' ? (parseFloat(el.value) || 0) : el.value;
+    applyOrientation();
+  });
+}
+document.getElementById('o-copy').addEventListener('click', async () => {
+  const text = `orientation: ${JSON.stringify(SITE.orientation, null, 2).replace(/"(\w+)":/g, '$1:').replace(/"/g, "'")},`;
+  try { await navigator.clipboard.writeText(text); document.getElementById('o-copy').textContent = 'Copied ✓'; }
+  catch { window.prompt('Copy this into SITE in plant.html:', text); }
+  setTimeout(() => { document.getElementById('o-copy').textContent = 'Copy settings for file'; }, 1500);
+});
+document.querySelectorAll('[data-layer]').forEach(cb =>
+  cb.addEventListener('change', () => { layers[cb.dataset.layer].visible = cb.checked; }));
+// Layers start as their checkboxes say (dimensions and names start hidden)
+document.querySelectorAll('[data-layer]').forEach(cb => { layers[cb.dataset.layer].visible = cb.checked; });
+
+// ============================================================================
+//  Camera views (defined in plant coordinates so they follow the orientation)
+// ============================================================================
+function setView(name) {
+  const { L, W, H } = CONTAINER_20;
+  const P = (x, y, z) => plant.localToWorld(new THREE.Vector3(x, y, z));
+  const target = P(L / 2, H * 0.8, -W / 2);
+  let pos;
+  if (name === 'plan') { target.copy(P(10, 0, 15)); pos = target.clone().add(new THREE.Vector3(0, 250, 0.01)); }
+  else if (name === 'south') { pos = P(L / 2 + 14, 30, 50); target.copy(P(L / 2 + 4, 1, 4)); }   // from over the ramp
+  else if (name === 'mandoor') { pos = P(-40, 12, -6); target.copy(P(-14, 6, -18)); }
+  else if (name === 'loader') { pos = P(34, 16, 30); target.copy(P(-4, 10, 26)); }
+  else if (name === 'enclosure') { pos = P(-62, 46, 62); target.copy(P(-6, 8, 10)); }
+  else if (name === 'silo') { pos = P(-82, 40, -104); target.copy(P(-11, 27, -31)); }
+  else if (name === 'aggbins') { pos = P(-42, 9, 52); target.copy(P(-11, 3, 34)); }
+  else if (name === 'slab') { pos = P(-62, 38, -92); target.copy(P(-2, 0, -34)); }
+  else if (name === 'north') { pos = P(L + 22, 16, -42); target.copy(P(L / 2, 4, -W - 3)); }
+  else if (name === 'east') pos = P(-55, 7, -W / 2 + 6);
+  else if (name === 'ramp') { pos = P(-48, 22, 58); target.copy(P(4, 2, 18)); }
+  else if (name === 'wall') { pos = P(66, 28, -20); target.copy(P(10, 0, 4)); }
+  else if (name === 'bins') { pos = P(95, 30, 80); target.copy(P(18, 0, 64)); }
+  else if (name === 'site') { pos = P(-58, 80, 125); target.copy(P(22, 0, 36)); }
+  else { pos = P(-100, 88, 128); target.copy(P(14, 0, 18)); }   // default 3D: the whole site
+  camera.position.copy(pos);
+  controls.target.copy(name === 'plan' ? target.setY(0) : target);
+  controls.update();
+}
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
+// ============================================================================
+//  Hover readout: ground point in plant coordinates
+// ============================================================================
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const hoverEl = document.getElementById('hover');
+renderer.domElement.addEventListener('pointermove', e => {
+  if (measure.active) return;   // the measure tool owns the readout while it's on
+  mouse.set(e.clientX / window.innerWidth * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.ray.intersectPlane(groundPlane, new THREE.Vector3());
+  if (!hit) return;
+  const p = plant.worldToLocal(hit.clone());
+  const dist = Math.hypot(p.x, p.z);
+  const brg = Math.atan2(hit.x, -hit.z);   // plant origin sits at the world origin
+  hoverEl.innerHTML =
+    `<div class="row"><label>Along</label><b>${fmtFtIn(p.x)}</b></div>` +
+    `<div class="row"><label>Out</label><b>${fmtFtIn(p.z)}</b></div>` +
+    `<div class="row"><label>From 0,0</label><span>${fmtFtIn(dist)} @ ${fmtBearing(THREE.MathUtils.radToDeg(brg))}</span></div>`;
+});
+
+// ============================================================================
+//  Measure tool: click two points on anything in the model. Points snap to the
+//  nearest corner of the face under the cursor when one is close on screen. Each
+//  measurement stays (in plant coordinates, so it turns with the orientation) until
+//  undone or cleared. "Level only" measures the horizontal distance and ignores height.
+// ============================================================================
+const measure = { active: false, first: null, items: [] };
+{
+  const group = new THREE.Group();
+  plant.add(group);
+  const lineMat = new THREE.LineBasicMaterial({ color: '#1565c0', depthTest: false, transparent: true });
+  const liveMat = new THREE.LineDashedMaterial({ color: '#42a5f5', dashSize: 0.5, gapSize: 0.3, depthTest: false, transparent: true });
+  const dotGeo = new THREE.SphereGeometry(0.18, 12, 8);
+  const dotMat = new THREE.MeshBasicMaterial({ color: '#1565c0', depthTest: false, transparent: true });
+  const snapMat = new THREE.MeshBasicMaterial({ color: '#ff9800', depthTest: false, transparent: true });
+  const cursor = new THREE.Mesh(dotGeo, dotMat);
+  cursor.renderOrder = 10; cursor.visible = false; group.add(cursor);
+  const liveLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), liveMat);
+  liveLine.renderOrder = 10; liveLine.visible = false; group.add(liveLine);
+  const liveLabel = label('', 'meas live'); liveLabel.visible = false; group.add(liveLabel);
+
+  const btn = document.getElementById('m-toggle'), status = document.getElementById('m-status');
+  const snapBox = document.getElementById('m-snap'), levelBox = document.getElementById('m-level');
+
+  // Everything solid in the plant except the annotation layers and this tool
+  const skip = new Set([group, layers.grid, layers.dims, layers.tags, layers.axes, layers.compass]);
+  const targets = () => {
+    const out = [];
+    const walk = o => { if (skip.has(o) || !o.visible) return; if (o.isMesh) out.push(o); o.children.forEach(walk); };
+    plant.children.forEach(walk);
+    return out;
+  };
+  const toScreen = v => { const p = v.clone().project(camera); return new THREE.Vector2((p.x + 1) * innerWidth / 2, (1 - p.y) * innerHeight / 2); };
+
+  // Point under the cursor (plant coordinates) and whether it snapped to a corner
+  function pick(e) {
+    mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    const hit = ray.intersectObjects(targets(), false)[0];
+    if (!hit) return null;
+    let world = hit.point.clone(), snapped = false;
+    if (snapBox.checked && hit.face && !hit.object.userData.noSnap) {
+      const pos = hit.object.geometry.attributes.position, at = new THREE.Vector2(e.clientX, e.clientY);
+      let best = 14;   // px
+      for (const i of [hit.face.a, hit.face.b, hit.face.c]) {
+        const v = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(hit.object.matrixWorld);
+        const d = toScreen(v).distanceTo(at);
+        if (d < best) { best = d; world = v; snapped = true; }
+      }
+    }
+    return { p: plant.worldToLocal(world), snapped };
+  }
+
+  function describe(a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, h = Math.hypot(dx, dz);
+    const total = levelBox.checked ? h : Math.hypot(h, dy);
+    return { total, h, dy, dx, dz };
+  }
+  function readout(m, prefix) {
+    hoverEl.innerHTML =
+      `<div class="row"><label>${prefix}</label><b>${fmtFtIn(m.total)}</b></div>` +
+      `<div class="row"><label>Horizontal</label><span>${fmtFtIn(m.h)}</span></div>` +
+      `<div class="row"><label>Vertical</label><span>${fmtFtIn(Math.abs(m.dy))}</span></div>` +
+      `<div class="row"><label>Δ Along / Out</label><span>${fmtFtIn(Math.abs(m.dx))} / ${fmtFtIn(Math.abs(m.dz))}</span></div>` +
+      `<div class="row"><label>Inches</label><span>${(m.total * 12).toFixed(1)}"</span></div>`;
+  }
+  const end = (a, b) => levelBox.checked ? new THREE.Vector3(b.x, a.y, b.z) : b;   // level: drawn at the first point's height
+
+  function setStatus() {
+    status.textContent = !measure.active ? (measure.items.length ? `${measure.items.length} measurement(s). Press M to measure.` : 'Press M or the button, then click two points.')
+      : measure.first ? 'Click the second point. Esc cancels.' : 'Click the first point. Drag still orbits.';
+  }
+  function setActive(on) {
+    measure.active = on; measure.first = null;
+    btn.classList.toggle('on', on); document.body.classList.toggle('measuring', on);
+    cursor.visible = liveLine.visible = liveLabel.visible = false;
+    if (!on) hoverEl.innerHTML = '<div class="sub">Hover the ground for coordinates</div>';
+    setStatus();
+  }
+  function addItem(a, b) {
+    const m = describe(a, b), bb = end(a, b), g = new THREE.Group();
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, bb]), lineMat);
+    line.renderOrder = 10; g.add(line);
+    for (const p of [a, bb]) { const d = new THREE.Mesh(dotGeo, dotMat); d.position.copy(p); d.renderOrder = 10; g.add(d); }
+    const l = label(fmtFtIn(m.total) + (levelBox.checked ? ' level' : ''), 'meas');
+    l.position.copy(a).lerp(bb, 0.5); g.add(l);
+    group.add(g); measure.items.push(g);
+    readout(m, 'Measured');
+  }
+  function removeItem(g) {
+    g.traverse(o => { if (o.isCSS2DObject) o.element.remove(); });
+    group.remove(g);
+  }
+
+  btn.addEventListener('click', () => setActive(!measure.active));
+  document.getElementById('m-undo').addEventListener('click', () => { const g = measure.items.pop(); if (g) removeItem(g); setStatus(); });
+  document.getElementById('m-clear').addEventListener('click', () => { measure.items.splice(0).forEach(removeItem); setStatus(); });
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'm' || e.key === 'M') setActive(!measure.active);
+    else if (e.key === 'Escape' && measure.active) { if (measure.first) { measure.first = null; liveLine.visible = liveLabel.visible = false; setStatus(); } else setActive(false); }
+    else if (e.key === 'Backspace' && measure.items.length) { e.preventDefault(); removeItem(measure.items.pop()); setStatus(); }
+  });
+
+  renderer.domElement.addEventListener('pointermove', e => {
+    if (!measure.active) return;
+    const hit = pick(e);
+    cursor.visible = !!hit;
+    if (!hit) return;
+    cursor.position.copy(hit.p); cursor.material = hit.snapped ? snapMat : dotMat;
+    if (measure.first) {
+      const m = describe(measure.first, hit.p), bb = end(measure.first, hit.p);
+      liveLine.geometry.setFromPoints([measure.first, bb]); liveLine.computeLineDistances();
+      liveLine.visible = true;
+      liveLabel.element.textContent = fmtFtIn(m.total); liveLabel.position.copy(measure.first).lerp(bb, 0.5); liveLabel.visible = true;
+      readout(m, 'Distance');
+    } else {
+      hoverEl.innerHTML = `<div class="row"><label>Point</label><span>${hit.snapped ? 'corner' : 'surface'}</span></div>` +
+        `<div class="row"><label>Along / Out</label><span>${fmtFtIn(hit.p.x)} / ${fmtFtIn(hit.p.z)}</span></div>` +
+        `<div class="row"><label>Height</label><span>${fmtFtIn(hit.p.y)}</span></div>`;
+    }
+  });
+  // A click (not an orbit drag) places a point
+  let down = null;
+  renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener('pointerup', e => {
+    if (!measure.active || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+    const hit = pick(e);
+    if (!hit) return;
+    if (!measure.first) { measure.first = hit.p.clone(); }
+    else { addItem(measure.first, hit.p.clone()); measure.first = null; liveLine.visible = liveLabel.visible = false; }
+    setStatus();
+  });
+  setStatus();
+}
+
+// ============================================================================
+//  Loop
+// ============================================================================
+const rose = document.getElementById('rose'), hudHeading = document.getElementById('hud-heading');
+function tick() {
+  controls.update();
+  const viewBearing = norm360(-THREE.MathUtils.radToDeg(controls.getAzimuthalAngle()));
+  rose.setAttribute('transform', `rotate(${-viewBearing})`);
+  hudHeading.textContent = `Looking ${compassPoint(viewBearing)}`;
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+applyOrientation();
+setView(new URLSearchParams(location.hash.slice(1)).get('view') || 'iso');   // e.g. plant.html#view=plan
+tick();
+</script>
+</body>
+</html>
